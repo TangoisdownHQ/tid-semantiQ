@@ -366,6 +366,16 @@ def _analyse_and_report(args, series, stats, redactor, source_name: str) -> int:
         write_json(Path(args.json), findings, evidences, redactor=redactor,
                    inventory=inventory)
         print(f"\nwrote {args.json}", file=sys.stderr)
+    if getattr(args, "wireshark_lua", None):
+        from out.wiresharklua import write_lua_annotations
+        annotated, skipped = write_lua_annotations(
+            Path(args.wireshark_lua), findings, source_name=source_name)
+        note = f" ({skipped} finding(s) have no packet filter)" if skipped else ""
+        print(
+            f"wrote {args.wireshark_lua} ({annotated} finding(s)){note} — "
+            "install wireshark/semantiq.lua and point it at this file",
+            file=sys.stderr,
+        )
     if args.colorfilters:
         count = write_wireshark(Path(args.colorfilters), findings)
         print(
@@ -841,6 +851,7 @@ def _add_shared_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--enrich-asn", metavar="TSV")
     parser.add_argument("--enrich-cloud", metavar="JSON", action="append")
     parser.add_argument("--html", metavar="PATH")
+    parser.add_argument("--wireshark-lua", metavar="PATH")
     parser.add_argument("--top", type=int, default=12)
     parser.add_argument("--trace", type=int, default=0, metavar="N")
     parser.add_argument("--no-inventory", action="store_true")
@@ -1077,6 +1088,13 @@ def main(argv=None) -> int:
         help="write the report as one self-contained HTML page: the same "
              "text, with section navigation and every technical term "
              "explained on hover. Loads no scripts or remote resources.",
+    )
+    read.add_argument(
+        "--wireshark-lua", metavar="PATH",
+        help="write findings as an annotations file for the bundled "
+             "Wireshark plugin (wireshark/semantiq.lua): inside Wireshark, "
+             "filter on semantiq.severity, add semantiq.title as a column, "
+             "and read each packet's verdicts in its protocol tree",
     )
     read.add_argument("--colorfilters", help="write a Wireshark colorfilters file")
     read.add_argument("--filters", help="write plain display filters, one per line")

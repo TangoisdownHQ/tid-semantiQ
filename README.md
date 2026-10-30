@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="assets/banner.svg" width="100%"
+       alt="tid-semantiQ — reads packet captures and narrates what is happening, encrypted or not">
+</p>
+
 # tid-semantiQ
 
 Reads a packet capture — encrypted or not — and narrates what is in it, with
@@ -24,7 +29,7 @@ interpreter — no database, no dashboard, no service. Shipping findings into
 
 ## Status
 
-**v0.1, working end-to-end.** 519 tests pass.
+**v0.1, working end-to-end.** 530 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -161,6 +166,13 @@ interpreter — no database, no dashboard, no service. Shipping findings into
   whole vocabulary the rules can emit is covered, and a completeness test
   walks the ontologies so a new rule citing an unexplained code fails the
   suite.
+- **Wireshark plugin** (`wireshark/semantiq.lua` + `--wireshark-lua`) — the
+  findings inside Wireshark itself, as a post-dissector: filter on
+  `semantiq.severity`, add `semantiq.title` as a column, read each packet's
+  verdicts in its protocol tree, and get a Tools-menu findings summary. The
+  plugin holds no opinion — semantiQ writes an annotations file and the
+  plugin only looks packets up in it by frame and stream, so it can never
+  disagree with the report. See [wireshark/README.md](wireshark/README.md).
 - **Glossary** (`--glossary`, also `--explain-terms`) — the report explaining
   its own vocabulary. The narration uses the words an operator uses —
   NXDOMAIN, SNI, asymmetry, a connection *refused* versus one *never
@@ -214,6 +226,10 @@ python3 semantiq.py read a-week-of-normal.pcap --baseline ~/.semantiq/home.db
 # findings + Wireshark colour rules + machine-readable output
 python3 semantiq.py read capture.pcap --baseline b.db \
     --colorfilters ~/.config/wireshark/colorfilters --json findings.json
+
+# findings INSIDE Wireshark: annotations for the bundled Lua plugin
+python3 semantiq.py read capture.pcap --wireshark-lua capture.pcap.lua
+SEMANTIQ_ANNOTATIONS=capture.pcap.lua wireshark capture.pcap   # then filter: semantiq
 
 # ship into the SOC
 python3 semantiq.py read capture.pcap --baseline b.db --out soc \
@@ -269,7 +285,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 519 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 530 tests
 
 python3 tools/make_test_pcap.py suspect.pcap --profile suspect
 python3 tools/make_tls_pcap.py tls.pcap keys.log        # real TLS 1.3 + keylog
@@ -284,14 +300,15 @@ only to decrypt TLS (`--http --keylog`) or to read HTTP/2.
 
 ## What it looks like
 
-The default output, on twenty minutes of real browsing. Abridged — the full
-report also carries a timeline, per-protocol tables, the ranked measurements,
-and what could not be measured:
+The default output, on twenty minutes of ordinary browsing — addresses and
+names anonymised to documentation values, the numbers real. Abridged — the
+full report also carries a timeline, per-protocol tables, the ranked
+measurements, and what could not be measured:
 
 ```
 ── WHAT THIS CAPTURE SHOWS ─────────────────────────────────────────────
 
-  A single host, 192.168.122.228, originated every exchange in this
+  A single host, 10.20.0.7, originated every exchange in this
   capture, reaching 117 distinct addresses. This is a host-side
   capture, so nothing here describes traffic between other parties on
   the network.
@@ -322,8 +339,8 @@ and what could not be measured:
         4  (  0.6%)  never answered — no reply to the opening SYN
 
   never answered — no reply to the opening SYN, by destination:
-        2 attempt(s)  216.21.232.84  dns084.b.register.com
-        2 attempt(s)  216.21.236.83  dns083.d.register.com
+        2 attempt(s)  203.0.113.84  ns1.dns-park.example
+        2 attempt(s)  203.0.113.83  ns2.dns-park.example
 
 ── TIMELINE  (1.7 min per row) ─────────────────────────────────────────
   +  0.0 s                           16 exch     4.3 kB    2 peers    2 new
@@ -335,35 +352,35 @@ and what could not be measured:
 
 ── ENDPOINT DETAIL  (top 2 of 117 by volume) ───────────────────────────
 
-  192.31.237.84
-    names        www.ridemcts.com  (1,321 exchanges)
+  198.51.100.84
+    names        www.example.com  (1,321 exchanges)
     scope        public
-    reached by   192.168.122.228 (1,327)
+    reached by   10.20.0.7 (1,327)
     transport    tcp/443 (1,321) · tcp/80 (6)
     volume       404.0 kB out, 5.4 MB in over 1,327 exchanges on 2 channels
-    active       2025-10-18 18:24:51Z → 2025-10-18 18:33:49Z  (9.0 min)
-    tls          ac7d6a60e4276ace (1,321)
+    active       2026-01-12 14:02:51Z → 2026-01-12 14:11:49Z  (9.0 min)
+    tls          3f9c21d8a0b47e65 (1,321)
     measured     asymmetry 0.84 · burstiness 0.17 · periodicity 0.08
 
-  192.168.122.1
-    reached by   192.168.122.228 (26,404)
+  10.20.0.1
+    reached by   10.20.0.7 (26,404)
     transport    udp (26,402) · udp/67 (2)
     volume       401.9 kB out, 1.3 MB in over 26,404 exchanges on 4,187 channels
     dns qtypes   A 16,686 · AAAA 9,600 · SRV 100 · CNAME 4 · MX 4 · NS 4
-    dns zones    3,785 distinct; busiest ridemcts.com (3,640), ridemcts.a (1,688)
+    dns zones    3,785 distinct; busiest example.com (3,640), example.a (1,688)
     dns outcome  1,338 of 13,197 resolved; NXDOMAIN 11,859
     measured     failure_rate.rcode 0.99 · periodicity 0.83 · burstiness 0.79
 
 ── DNS ZONE DETAIL  (top 1 of 3,785 by lookups) ────────────────────────
 
-  ridemcts.a
+  example.a
     root zone    .a is not a delegated top-level domain — these lookups
                  could not resolve
-    queried by   192.168.122.228 (1,688)
-    resolver     192.168.122.1 (1,688)
+    queried by   10.20.0.7 (1,688)
+    resolver     10.20.0.1 (1,688)
     lookups      844 queries, 2 distinct name(s)
-                     1,664  ridemcts.a
-                        24  ridemcts.A
+                     1,664  example.a
+                        24  example.A
     qtypes       A 844 · AAAA 844
     outcome      0 of 844 answered lookups resolved (0.0%): NXDOMAIN 844
     measured     failure_rate.rcode 0.99 · periodicity 0.43

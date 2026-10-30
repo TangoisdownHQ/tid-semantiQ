@@ -1,10 +1,10 @@
 """Output sinks: json, wireshark, soc.
 
 This module is the whole reason tid-semantiQ is a standalone tool rather than
-a module of tid-soc-agent. The engine is stateless and the SOC is one sink
+a module of any particular SOC. The engine is stateless and a SOC is one sink
 among several — so `semantiq read foo.pcap` works on a laptop in a hotel room
-with no Postgres, no dashboard and no auth, and the same findings ship into
-the SOC with `--out soc`. The SOC is never a dependency.
+with no database, no dashboard and no auth, and the same findings ship into
+a collector with `--out soc`. No SOC is ever a dependency.
 """
 
 from __future__ import annotations
@@ -121,22 +121,21 @@ _SEVERITY_TO_SOC = {
 
 
 def soc_event(finding: Finding, host: str) -> Mapping[str, object]:
-    """Shape a Finding as a tid-soc-agent collector event.
+    """Shape a Finding as a flat JSON collector event.
 
-    Field names follow the SOC's existing event schema so the correlation
-    consumer, Sigma engine and ATT&CK enrichment work on these without
-    changes, and tid-AGENT can investigate them like any other telemetry.
+    The field set (host/agent/category/severity/title/tags/details plus the
+    full evidence ledger) is the common denominator of SIEM ingest APIs, so
+    a correlation consumer, a Sigma engine or ATT&CK enrichment can work on
+    these events without reshaping.
 
-    VERIFY BEFORE SHIPPING: the schema here is written from reading
-    `endpoint/collector.py` and `services/ingest_api.py`, not from a
-    published contract. Confirm against the live ingest API before trusting
-    the integration — a silently-rejected batch looks exactly like a quiet
-    network.
+    VERIFY BEFORE SHIPPING: no two collectors share a contract. Confirm the
+    shape against your ingest API before trusting the integration — a
+    silently-rejected batch looks exactly like a quiet network.
 
-    The flow-sourced `period_s` and `interval_mad_s` are the point of the
-    integration: they replace the connection-poll timing that makes the SOC's
-    own beacon heuristic fire on persistent connections and miss short
-    callbacks.
+    The flow-sourced `period_s` and `interval_mad_s` are the point of
+    shipping these at all: timing measured from the packets themselves,
+    rather than from connection-table polling — which fires on persistent
+    connections and misses short callbacks.
     """
     channel = finding.channel
     periodicity = finding.evidence.by_name("periodicity")

@@ -12,7 +12,7 @@ Two backends, same protocol:
   NullBaseline     explicitly no history, so `rarity` declines to answer
                    rather than inventing a score.
 
-A Postgres-backed implementation against tid-soc-agent's own history is the
+A database-backed implementation against a fleet's shared history is the
 third, and it is the one that gives fleet-wide prevalence real meaning —
 prevalence across one laptop is a much weaker denominator than prevalence
 across every enrolled endpoint.

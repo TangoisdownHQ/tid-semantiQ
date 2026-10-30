@@ -1099,7 +1099,8 @@ def main(argv=None) -> int:
     read.add_argument("--colorfilters", help="write a Wireshark colorfilters file")
     read.add_argument("--filters", help="write plain display filters, one per line")
     read.add_argument("--out", choices=("report", "soc"), default="report")
-    read.add_argument("--soc-url", help="tid-soc-agent collector endpoint")
+    read.add_argument("--soc-url",
+                      help="HTTP event-collector endpoint (JSON via POST)")
     read.add_argument("--soc-key", help="SOC API key")
     read.add_argument("--soc-host", default="semantiq-sensor", help="host field on SOC events")
     read.add_argument(

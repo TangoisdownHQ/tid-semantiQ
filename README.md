@@ -25,7 +25,8 @@ authorized target you can supply TLS keys and it reads the plaintext too.
 
 Standalone by design. `semantiq.py read foo.pcap` needs nothing but a Python
 interpreter — no database, no dashboard, no service. Shipping findings into
-[tid-soc-agent](../tid-soc-agent) is one *output sink*, never a dependency.
+a SOC collector or SIEM (`--out soc`) is one *output sink*, never a
+dependency.
 
 ## Status
 

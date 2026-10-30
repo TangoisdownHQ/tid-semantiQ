@@ -86,12 +86,12 @@ Why not the obvious alternatives:
 Bursts collapse both onto the same `Series`. `test_in_connection_heartbeat_matches_reconnect_beacon`
 asserts the primitive cannot tell them apart.
 
-This is also precisely why `tid-soc-agent`'s existing detector is inverted.
-It samples `psutil.net_connections()` once per 30s cycle
-(`endpoint/collector.py:718`, `dashboard/storage.py:2460`): a persistent
-connection is present at every poll and reads as perfectly regular, while a
-short 60-second callback is almost never sampled. False positive on the
-shape modern C2 prefers, false negative on the thing it is named after.
+This is also precisely why connection-polling beacon detectors are
+inverted. A detector that samples the OS connection table on a fixed cycle
+(`psutil.net_connections()` every 30s, say) sees a persistent connection at
+every poll — perfectly regular — while a short 60-second callback is almost
+never sampled at all. False positive on the shape modern C2 prefers, false
+negative on the thing it is named after.
 
 **`gap_s` is the most dangerous knob in the tool.** Set it below one round of
 segmentation and a single message fragments into several Observations,

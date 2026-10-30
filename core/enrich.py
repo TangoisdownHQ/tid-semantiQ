@@ -108,6 +108,10 @@ class Enricher:
         self._asn6 = _RangeIndex()
         self._cloud4 = _RangeIndex()
         self._cloud6 = _RangeIndex()
+        #: MAC-prefix -> vendor, keyed by prefix length in hex digits so a
+        #: longer (more specific) MA-M/MA-S assignment wins over the 24-bit
+        #: block it sits inside. {6: {...}, 7: {...}, 9: {...}}.
+        self._oui: Dict[int, Dict[str, str]] = {}
         self.sources: List[str] = []
 
     # -- loading -----------------------------------------------------------
@@ -210,6 +214,82 @@ class Enricher:
                 if self._add_cloud(prefix, "Azure", region, service):
                     count += 1
         return count
+
+    def load_oui_manuf(self, path: Path | str) -> int:
+        """Wireshark's `manuf` file (or IEEE oui.csv): MAC prefix -> vendor.
+
+        The `manuf` format is `prefix<ws>short[<ws>long]`, prefix either a
+        24-bit `XX:XX:XX` or a longer `XX:XX:XX:XX:XX:XX/NN` for the smaller
+        MA-M (28-bit) and MA-S (36-bit) blocks. The long name wins when
+        present; the short name is the fallback. A leading-# comment and the
+        occasional blank line are skipped.
+        """
+        path = Path(path)
+        rows = 0
+        with _open_maybe_gz(path) as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t") if "\t" in line else line.split(None, 2)
+                if len(parts) < 2:
+                    continue
+                prefix, short = parts[0], parts[1]
+                vendor = parts[2].strip() if len(parts) >= 3 else short.strip()
+                digits = self._oui_key(prefix)
+                if digits is None:
+                    continue
+                key, length = digits
+                self._oui.setdefault(length, {})[key] = vendor
+                rows += 1
+        self.sources.append(f"OUI: {path.name} ({rows:,} prefixes)")
+        return rows
+
+    @staticmethod
+    def _oui_key(prefix: str):
+        """Normalise a manuf prefix to (hex-digits, length) or None.
+
+        `00:1B:C5:00:00:00/36` -> ("001bc5000", 9); `00:00:0C` -> ("00000c", 6).
+        """
+        prefix = prefix.strip()
+        bits = 24
+        if "/" in prefix:
+            prefix, _, bitstr = prefix.partition("/")
+            try:
+                bits = int(bitstr)
+            except ValueError:
+                return None
+        hexonly = prefix.replace(":", "").replace("-", "").replace(".", "").lower()
+        length = bits // 4
+        if length <= 0 or length > len(hexonly):
+            return None
+        return hexonly[:length], length
+
+    def lookup_mac(self, mac: str) -> Optional[str]:
+        """Vendor for a MAC, matching the most specific prefix loaded.
+
+        A locally-administered or multicast MAC (the low bit of the first
+        octet set, or the universal/local bit) names no vendor — randomised
+        privacy MACs live here — so it returns None rather than a wrong name.
+        """
+        if not self._oui:
+            return None
+        hexonly = mac.replace(":", "").replace("-", "").replace(".", "").lower()
+        if len(hexonly) < 6:
+            return None
+        try:
+            first_octet = int(hexonly[:2], 16)
+        except ValueError:
+            return None
+        # Bit 1 of the first octet = locally administered (randomised MAC);
+        # bit 0 = multicast. Neither carries a manufacturer OUI.
+        if first_octet & 0x02 or first_octet & 0x01:
+            return None
+        for length in sorted(self._oui, reverse=True):   # longest match wins
+            vendor = self._oui[length].get(hexonly[:length])
+            if vendor is not None:
+                return vendor
+        return None
 
     # -- lookup ------------------------------------------------------------
 

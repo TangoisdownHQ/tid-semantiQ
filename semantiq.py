@@ -405,7 +405,8 @@ def _build_enricher(args):
     """
     asn_path = getattr(args, "enrich_asn", None)
     cloud_paths = getattr(args, "enrich_cloud", None) or []
-    if not asn_path and not cloud_paths:
+    oui_path = getattr(args, "enrich_oui", None)
+    if not asn_path and not cloud_paths and not oui_path:
         return None
     from core.enrich import Enricher
     enricher = Enricher()
@@ -413,6 +414,8 @@ def _build_enricher(args):
         enricher.load_asn_tsv(asn_path)
     for path in cloud_paths:
         enricher.load_cloud_json(path)
+    if oui_path:
+        enricher.load_oui_manuf(oui_path)
     return enricher
 
 
@@ -850,6 +853,7 @@ def _add_shared_flags(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--enrich-asn", metavar="TSV")
     parser.add_argument("--enrich-cloud", metavar="JSON", action="append")
+    parser.add_argument("--enrich-oui", metavar="MANUF")
     parser.add_argument("--html", metavar="PATH")
     parser.add_argument("--wireshark-lua", metavar="PATH")
     parser.add_argument("--top", type=int, default=12)
@@ -1027,6 +1031,11 @@ def main(argv=None) -> int:
         help="a cloud provider's published range file (AWS ip-ranges.json, "
              "GCP cloud.json, or Azure ServiceTags), auto-detected; "
              "repeatable, one per provider",
+    )
+    read.add_argument(
+        "--enrich-oui", metavar="MANUF",
+        help="MAC-vendor dataset (Wireshark 'manuf' format or IEEE oui.csv, "
+             ".gz accepted) to name LAN devices by their hardware vendor",
     )
     # -- model-assisted explanation (optional, off by default) ----------
     #

@@ -1,33 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 270" role="img"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 350" role="img"
      aria-label="tid-semantiQ — who talked, to whom, how often, how much: readable through encryption.">
-  <rect width="1200" height="270" fill="#0a0d12"/>
+  <rect width="1200" height="350" fill="#0a0d12"/>
 
   <!-- ciphertext field with the questions the tool answers surfacing -->
-  <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="17"
+  <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="23"
      letter-spacing="2">
-    <text x="70" y="58" fill="#242f3b">17 03 03 4a f1 9c
-      <tspan fill="#e8eef3" letter-spacing="2.5">WHO TALKED</tspan>
-      8b 02 d7 33 6e a9 c4 1f 58 e2 7d b0 49</text>
-    <text x="70" y="96" fill="#242f3b">6a de 91 05 cc 72 b8 e4
-      <tspan fill="#e8eef3" letter-spacing="2.5">TO WHOM</tspan>
-      3f 0a 96 51 dd 28 c7 84 1b ef</text>
-    <text x="70" y="134" fill="#242f3b">f2 47
-      <tspan fill="#e8eef3" letter-spacing="2.5">HOW OFTEN</tspan>
-      9e 63 b1 0c d8 75 2a
-      <tspan fill="#e8eef3" letter-spacing="2.5">HOW MUCH</tspan>
-      e7 38 c0 59</text>
-    <text x="70" y="172" fill="#242f3b">04 ba 6d f8 23
-      <tspan fill="#2dd4a7" letter-spacing="2.5">— READABLE THROUGH ENCRYPTION</tspan>
-      91 ce 47 a2</text>
+    <text x="60" y="74" fill="#242f3b">17 03 03 4a f1
+      <tspan fill="#e8eef3" letter-spacing="3">WHO TALKED</tspan>
+      8b 02 d7 33 6e a9 c4 1f 58 7d b0</text>
+    <text x="60" y="124" fill="#242f3b">6a de 91 05 cc 72 b8
+      <tspan fill="#e8eef3" letter-spacing="3">TO WHOM</tspan>
+      3f 0a 96 51 dd 28 c7 84</text>
+    <text x="60" y="174" fill="#242f3b">f2 47
+      <tspan fill="#e8eef3" letter-spacing="3">HOW OFTEN</tspan>
+      9e 63 b1 0c d8
+      <tspan fill="#e8eef3" letter-spacing="3">HOW MUCH</tspan>
+      e7 38 c0</text>
+    <text x="60" y="224" fill="#242f3b">04 ba 6d f8
+      <tspan fill="#2dd4a7" letter-spacing="3">— READABLE THROUGH ENCRYPTION</tspan>
+      91 ce 47</text>
   </g>
 
-  <line x1="70" y1="198" x2="1130" y2="198" stroke="#1d2731" stroke-width="1.5"/>
+  <line x1="60" y1="258" x2="1140" y2="258" stroke="#1d2731" stroke-width="2"/>
 
   <!-- wordmark row -->
   <g font-family="ui-monospace,Menlo,Consolas,monospace">
-    <text x="70" y="241" font-size="34" font-weight="700" fill="#e8eef3"
+    <text x="60" y="318" font-size="46" font-weight="700" fill="#e8eef3"
           letter-spacing="-0.5">tid-semanti<tspan fill="#2dd4a7">Q</tspan></text>
-    <text x="1130" y="238" text-anchor="end" font-size="15" fill="#93a5b4">
-      reads packet captures — narrates what is happening · no model writes a verdict</text>
+    <text x="1140" y="300" text-anchor="end" font-size="18" fill="#93a5b4">
+      reads packet captures — narrates what is happening</text>
+    <text x="1140" y="326" text-anchor="end" font-size="18" fill="#93a5b4">
+      no model writes a verdict</text>
   </g>
 </svg>

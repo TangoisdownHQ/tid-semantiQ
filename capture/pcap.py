@@ -26,6 +26,7 @@ from capture.decode import (
     decode_tcp,
     decode_udp,
     dhcp_info,
+    ethernet_src_mac,
     dns_message,
     is_private,
     ntp_info,
@@ -186,6 +187,10 @@ class PcapSource(CaptureSource):
         #: version field to verify — so membership here is what lets them
         #: be counted as the encrypted traffic they are.
         self._quic_flows: set = set()
+        #: private address -> the source MAC seen for it, for offline
+        #: device-vendor naming. Public addresses are never recorded — see
+        #: _handle_frame for why.
+        self._host_macs: Dict[str, str] = {}
         self.stats = {"frames": 0, "decoded": 0, "tcp": 0, "udp": 0, "dns": 0,
                       "http": 0, "icmp": 0}
 
@@ -222,6 +227,7 @@ class PcapSource(CaptureSource):
         self.stats["connections"] = self.connection_outcomes()
         self.stats["icmp_errors"] = self.icmp_errors()
         self.stats["integrity"] = self._integrity.report()
+        self.stats["host_macs"] = dict(self._host_macs)
         if self._http is not None:
             self.stats["http"] = (
                 self._http.stats["requests"] + self._http.stats["responses"]
@@ -254,6 +260,17 @@ class PcapSource(CaptureSource):
         if packet is None:
             return []
         self.stats["decoded"] += 1
+
+        # Remember the source MAC of each PRIVATE address — that is the one
+        # case a frame's source MAC names the host itself. For a public
+        # source the MAC is the gateway's (the last hop onto this segment),
+        # not the remote endpoint's, so recording it would let the narrator
+        # label every internet host with the router's vendor. Captured here,
+        # before protocol dispatch, so it covers every frame type.
+        if packet.src not in self._host_macs and is_private(packet.src):
+            mac = ethernet_src_mac(linktype, frame)
+            if mac is not None:
+                self._host_macs[packet.src] = mac
 
         if packet.proto == PROTO_TCP:
             return self._handle_tcp(frame_no, ts, packet, frame)

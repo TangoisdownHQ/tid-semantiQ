@@ -250,7 +250,8 @@ def narrate(
     # noticed, these are how it gets followed up.
     # Hosts before endpoints: "what did this host do" is the question a
     # reader has first, and on a multi-host capture it had no section.
-    lines += _host_detail(series, names, by_key, top_n)
+    host_macs = (stats or {}).get("host_macs") or {}
+    lines += _host_detail(series, names, by_key, top_n, enricher, host_macs)
     lines += _endpoint_detail(series, names, by_key, top_n, enricher)
     lines += _zone_detail(series, by_key, top_n)
     # Per-exchange detail last among the measurement sections: it is the
@@ -435,7 +436,8 @@ def _addresses_itself(target: str, address: str,
     return bare in (address, known) or target in (address, known)
 
 
-def _host_detail(series, names, by_key, top_n) -> List[str]:
+def _host_detail(series, names, by_key, top_n, enricher=None,
+                 host_macs=None) -> List[str]:
     """One block per originating host: everything IT did.
 
     THE GAP THIS FILLS. Every other dossier is organised by the address that
@@ -542,6 +544,22 @@ def _host_detail(series, names, by_key, top_n) -> List[str]:
         scope = _scope(who)
         if scope:
             out.append(f"    {'scope':<12} {scope}")
+
+        # Device vendor from the host's own source MAC — only ever recorded
+        # for a LAN address (the capture layer refuses public ones, whose
+        # source MAC is the gateway's). The MAC itself is shown so the
+        # reading can be checked; a randomised or locally-administered MAC
+        # yields no vendor and is reported as the privacy measure it is.
+        mac = (host_macs or {}).get(who)
+        if mac:
+            vendor = enricher.lookup_mac(mac) if (
+                enricher is not None and enricher.loaded) else None
+            if vendor:
+                out.append(f"    {'device':<12} {vendor}  ({mac})")
+            elif mac.split(":")[0] and int(mac.split(":")[0], 16) & 0x02:
+                out.append(f"    {'device':<12} {mac} — randomised "
+                           "(locally-administered MAC, names no vendor)")
+
         out.append(
             f"    {'volume':<12} {_bytes(entry['out'])} sent, "
             f"{_bytes(entry['in'])} received over {entry['obs']:,} exchanges"

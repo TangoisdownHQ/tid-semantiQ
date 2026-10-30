@@ -206,6 +206,107 @@ def test_glossary_covers_attribution():
     assert "ASN / cloud attribution" in found
 
 
+# --------------------------------------------------------------------------
+# MAC / OUI vendor naming
+# --------------------------------------------------------------------------
+
+_MANUF = (
+    "# a manuf-format OUI table\n"
+    "00:00:0C\tCisco\tCisco Systems, Inc\n"
+    "B8:27:EB\tRaspberryPi\tRaspberry Pi Foundation\n"
+    "28:6F:B9\tNokia\tNokia Shanghai Bell Co., Ltd.\n"
+    "70:B3:D5:3A:B0:00/36\tTinyVendor\tA Small MA-S Assignee\n"
+)
+
+
+def _oui_enricher(tmp: Path):
+    from core.enrich import Enricher
+    path = tmp / "manuf"
+    path.write_text(_MANUF)
+    enricher = Enricher()
+    enricher.load_oui_manuf(path)
+    return enricher
+
+
+def test_oui_lookup_24_bit_vendor():
+    with tempfile.TemporaryDirectory() as d:
+        enricher = _oui_enricher(Path(d))
+    assert enricher.lookup_mac("b8:27:eb:1a:2b:3c") == "Raspberry Pi Foundation"
+    assert enricher.lookup_mac("00:00:0c:ff:ee:dd") == "Cisco Systems, Inc"
+    assert enricher.lookup_mac("ac:de:48:00:11:22") is None   # not in table
+
+
+def test_longer_ma_s_prefix_wins_over_its_24_bit_block():
+    with tempfile.TemporaryDirectory() as d:
+        enricher = _oui_enricher(Path(d))
+    # 70:b3:d5 is the IEEE-registered block shared by many MA-S assignees;
+    # the 36-bit entry is more specific and must win for its sub-range.
+    assert enricher.lookup_mac("70:b3:d5:3a:b0:99") == "A Small MA-S Assignee"
+
+
+def test_randomised_and_multicast_macs_name_no_vendor():
+    with tempfile.TemporaryDirectory() as d:
+        enricher = _oui_enricher(Path(d))
+    # locally-administered bit (0x02) set in the first octet -> randomised
+    assert enricher.lookup_mac("b8:27:eb:1a:2b:3c") is not None
+    assert enricher.lookup_mac("ba:27:eb:1a:2b:3c") is None   # 0xba = ...10
+    assert enricher.lookup_mac("01:00:5e:00:00:fb") is None   # multicast
+
+
+def test_mac_extraction_only_from_ethernet():
+    from capture.decode import ethernet_src_mac
+    from capture.pcapfile import LINKTYPE_ETHERNET, LINKTYPE_RAW
+    frame = bytes.fromhex("ffffffffffff" "b827eb1a2b3c" "0800") + b"\x00" * 20
+    assert ethernet_src_mac(LINKTYPE_ETHERNET, frame) == "b8:27:eb:1a:2b:3c"
+    assert ethernet_src_mac(LINKTYPE_RAW, frame) is None
+    assert ethernet_src_mac(LINKTYPE_ETHERNET, b"\x00" * 4) is None
+
+
+def test_host_detail_names_a_lan_device_by_vendor():
+    import struct
+    from capture.base import group_into_series
+    from capture.pcap import PcapSource
+    from capture.pcapfile import LINKTYPE_ETHERNET
+
+    def _eth_udp(src_mac, src_ip, dst_ip):
+        udp = struct.pack(">HHHH", 40000, 9999, 12, 0) + b"ping"
+        ip = struct.pack(">BBHHHBBH4s4s", 0x45, 0, 20 + len(udp), 1, 0, 64,
+                         17, 0,
+                         bytes(int(o) for o in src_ip.split(".")),
+                         bytes(int(o) for o in dst_ip.split(".")))
+        return (bytes.fromhex("ffffffffffff") + bytes.fromhex(src_mac)
+                + b"\x08\x00" + ip + udp)
+
+    frames = [
+        _eth_udp("b827eb1a2b3c", "10.0.0.50", "10.0.0.1"),
+        _eth_udp("b827eb1a2b3c", "10.0.0.50", "10.0.0.1"),
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "t.pcap"
+        with open(path, "wb") as handle:
+            handle.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0,
+                                     65535, LINKTYPE_ETHERNET))
+            for i, frame in enumerate(frames):
+                handle.write(struct.pack("<IIII", 1_700_000_000 + i, 0,
+                                         len(frame), len(frame)))
+                handle.write(frame)
+        source = PcapSource(path)
+        series = list(group_into_series(source.observations()))
+        enricher = _oui_enricher(Path(d))
+        text = narrate(series, [], source_name="t.pcap",
+                       enricher=enricher, stats=source.stats)
+    assert "10.0.0.50" in source.stats["host_macs"]
+    assert "Raspberry Pi Foundation" in text
+    assert "b8:27:eb:1a:2b:3c" in text
+
+
+def test_glossary_covers_mac_vendor():
+    from out.glossary import terms_in
+    found = {t.term for _, t in terms_in(
+        "the device's MAC OUI names the hardware vendor")}
+    assert "MAC / OUI vendor" in found
+
+
 def _run_all():
     import traceback
 

@@ -483,7 +483,7 @@ GLOSSARY: List[Term] = [
         "telemetry agents and keepalives behave, so the tool never alerts on "
         "regularity alone. High periodicity is interesting only once it is "
         "joined to rarity, which is the point of the next entry.",
-        see=["jitter", "beacon", "rarity", "cadence"],
+        see=["jitter", "beacon", "rarity / prevalence"],
     ),
     Term(
         "jitter",
@@ -762,7 +762,79 @@ GLOSSARY: List[Term] = [
         "kind of silence it is.",
         see=["TLS 1.3", "encrypted traffic", "SNI", "activity shape"],
     ),
-    # ---- the capture file itself ------------------------------------------
+    # ---- industrial control and drone links --------------------------------
+    Term(
+        "Modbus (function codes, unit ids)",
+        [r"\bModbus\b", r"function codes?\b", r"unit identifiers?\b",
+         r"exception responses?", r"\bcoils?\b", r"holding registers?"],
+        "The factory-floor protocol: commands a device obeys with no password.",
+        "Modbus/TCP is one of the oldest and most widespread industrial "
+        "protocols: a master polls devices, reads registers, writes coils "
+        "and setpoints. It carries no authentication at all — a device obeys "
+        "any correctly-formed command that reaches it, which is why WHO sent "
+        "a command matters more than what it says. A function code names "
+        "the operation (read, write, diagnostic); a unit identifier names "
+        "the device behind a gateway. The behavioural tells are sweeps: one "
+        "source stepping through many unit ids is mapping what exists, many "
+        "function codes tried against one device is probing what it will "
+        "obey, and a flood of exception responses is a device refusing "
+        "operations something keeps requesting.",
+        see=["cardinality / fanout", "rarity / prevalence"],
+    ),
+    Term(
+        "MAC / OUI vendor",
+        [r"\bMAC\b", r"\bOUI\b", r"locally-administered", r"randomised",
+         r"hardware vendor"],
+        "Naming a LAN device by the vendor block of its hardware address.",
+        "Every network interface has a MAC address, and its first half is an "
+        "OUI (Organisationally Unique Identifier) assigned to the vendor who "
+        "made the hardware — so a MAC beginning b8:27:eb is a Raspberry Pi, "
+        "and one in Hikvision's block is probably a camera. The tool reads "
+        "the source MAC a host puts on its own frames and names the device "
+        "from an offline vendor table. Two honesty limits apply. First, a "
+        "MAC only names the device for a host on the LOCAL segment: beyond "
+        "the gateway, a frame's source MAC is the gateway's, so the tool "
+        "attributes MACs only to private addresses and never to internet "
+        "endpoints. Second, modern phones and laptops randomise their MAC "
+        "for privacy — a randomised (locally-administered) address names no "
+        "vendor, and the report says so rather than guessing.",
+        see=["ASN / cloud attribution", "DHCP"],
+    ),
+    Term(
+        "DNP3 / outstation",
+        [r"\bDNP3\b", r"\boutstation\b", r"unsolicited", r"dnp3\.address"],
+        "A SCADA protocol for utilities; the outstation is the field device.",
+        "DNP3 (Distributed Network Protocol 3) supervises and controls "
+        "equipment across electric, water and gas utilities. The master "
+        "station issues commands; an outstation is the remote field device "
+        "that carries them out and reports back — often on its own "
+        "initiative, as unsolicited responses, so the master learns of a "
+        "change without polling for it. Disabling that unsolicited reporting "
+        "is a recognised attack step: it blinds the operator to what the "
+        "equipment is doing while control continues, which is why the report "
+        "flags it specifically. Like Modbus, base DNP3 authenticates "
+        "nothing, so the signal is again provenance — a control command or a "
+        "restart from a source with no established history.",
+        see=["Modbus (function codes, unit ids)", "rarity / prevalence"],
+    ),
+    Term(
+        "MAVLink",
+        [r"\bMAVLink\b", r"mavlink\.", r"\bairframe\b", r"\bdisarm\b",
+         r"ground[- ]station"],
+        "The messaging protocol between a drone and its ground station.",
+        "MAVLink is the lightweight message protocol that carries commands "
+        "and telemetry between an uncrewed vehicle (a drone) and its ground "
+        "control station: arm and disarm, mode changes, waypoints, parameter "
+        "writes, and a stream of position reports. It identifies the sender "
+        "by a numeric system id but, in its common form, authenticates "
+        "nothing — so a disarm or a ground-station rebind from a system id "
+        "with no prior history is the shape of a hijack attempt. The tool "
+        "also checks telemetry against physics: a reported position that "
+        "moved faster than the airframe could fly is either a spoofed GPS "
+        "feed or a sensor fault, and either is worth knowing. Wireshark ships "
+        "no MAVLink dissector, so this one is parsed natively.",
+        see=["rarity / prevalence"],
+    ),
     Term(
         "capture artefacts (snaplen, SPAN duplicates)",
         [r"\bsnaplen\b", r"CAPTURE ARTEFACTS", r"byte-identical",

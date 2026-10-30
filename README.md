@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 530 tests pass.
+**v0.1, working end-to-end.** 536 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -147,14 +147,18 @@ dependency.
   (with the absence-of-evidence hedge). A literal two-file comparison,
   explicitly distinct from the rarity baseline, which is read but never
   written here.
-- **Offline enrichment** (`--enrich-asn`, `--enrich-cloud`) — public
-  endpoints attributed from datasets on disk: "announced by AS13335
-  CLOUDFLARENET (US)", "in AWS us-east-1, EC2 — the range's landlord, not
-  necessarily who runs the endpoint". Consumes the common IP-to-ASN TSV
-  and AWS/GCP/Azure published range files (auto-detected). Offline on
+- **Offline enrichment** (`--enrich-asn`, `--enrich-cloud`, `--enrich-oui`)
+  — endpoints and devices attributed from datasets on disk: "announced by
+  AS13335 CLOUDFLARENET (US)", "in AWS us-east-1, EC2 — the range's
+  landlord, not necessarily who runs the endpoint", and for LAN hosts a
+  device vendor from the source MAC's OUI ("Raspberry Pi Foundation").
+  Consumes the common IP-to-ASN TSV, AWS/GCP/Azure range files
+  (auto-detected), and a Wireshark `manuf` / IEEE OUI table. Offline on
   purpose: resolving an indicator against a live service tells the service
-  what you are investigating. Nothing bundled; nothing degrades silently;
-  private space is never attributed regardless of what a dataset claims.
+  what you are investigating. Each attribution has an honesty gate — ASN
+  and cloud skip private space, MAC naming is confined to LAN hosts (a
+  public source MAC is the gateway's) and declines randomised addresses.
+  Nothing bundled; nothing degrades silently.
 - **HTML report** (`--html report.html`) — the identical report text as
   one self-contained page: section navigation from the report's own rules,
   and the glossary inverted into hover tooltips — the first occurrence of
@@ -253,9 +257,10 @@ python3 semantiq.py read capture.pcap --glossary
 # the same report as one self-contained HTML page, terms explained on hover
 python3 semantiq.py read capture.pcap --glossary --html report.html
 
-# attribute public endpoints from datasets on disk (nothing leaves the box)
+# attribute endpoints + LAN devices from datasets on disk (nothing leaves the box)
 python3 semantiq.py read capture.pcap \
-    --enrich-asn ip2asn-combined.tsv.gz --enrich-cloud ip-ranges.json
+    --enrich-asn ip2asn-combined.tsv.gz --enrich-cloud ip-ranges.json \
+    --enrich-oui /usr/share/wireshark/manuf
 
 # explain the findings in plain language, using a LOCAL model
 python3 semantiq.py read capture.pcap --explain            # ollama/qwen-abl
@@ -286,7 +291,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 530 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 536 tests
 
 python3 tools/make_test_pcap.py suspect.pcap --profile suspect
 python3 tools/make_tls_pcap.py tls.pcap keys.log        # real TLS 1.3 + keylog

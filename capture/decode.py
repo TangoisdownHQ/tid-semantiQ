@@ -28,7 +28,7 @@ __all__ = ["IPPacket", "Segment", "DNS_RCODES", "decode_ip", "decode_tcp", "deco
            "DnsMessage", "DnsRecord", "decode_icmp", "IcmpMessage",
            "PROTO_ICMP", "PROTO_ICMPV6", "is_private", "scope_of",
            "ssh_banner", "ntp_info", "NtpInfo", "dhcp_info", "DhcpInfo",
-           "quic_info", "QuicInfo"]
+           "quic_info", "QuicInfo", "ethernet_src_mac"]
 
 _ETHERTYPE_IPV4 = 0x0800
 _ETHERTYPE_IPV6 = 0x86DD
@@ -97,6 +97,24 @@ def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
         return IPPacket(src, dst, nxt, body)
 
     return None
+
+
+def ethernet_src_mac(linktype: int, frame: bytes) -> Optional[str]:
+    """The source MAC of an Ethernet frame, as `aa:bb:cc:dd:ee:ff`, or None.
+
+    Only Ethernet carries a usable per-host source MAC in a fixed place;
+    the cooked and raw link types do not, and for them this returns None
+    rather than reading six arbitrary bytes as an address.
+
+    A source MAC only names the DEVICE for a host on the local segment —
+    for anything beyond the gateway the frame's source MAC is the gateway's,
+    not the remote endpoint's. The caller is responsible for that gate (it
+    attributes MACs only to private-scope addresses); this function just
+    reports what the frame says.
+    """
+    if linktype != LINKTYPE_ETHERNET or len(frame) < 12:
+        return None
+    return ":".join(f"{b:02x}" for b in frame[6:12])
 
 
 def _strip_link(linktype: int, frame: bytes) -> Optional[bytes]:

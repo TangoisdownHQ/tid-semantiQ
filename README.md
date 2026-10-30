@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 536 tests pass.
+**v0.1, working end-to-end.** 543 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -291,7 +291,11 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 536 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 543 tests
+
+# measure detection-per-jitter + false positives against the real scorer
+python3 tools/calibrate.py
+python3 tools/calibrate.py --sweep periodicity.dispersion_decay=2:5:1
 
 python3 tools/make_test_pcap.py suspect.pcap --profile suspect
 python3 tools/make_tls_pcap.py tls.pcap keys.log        # real TLS 1.3 + keylog
@@ -658,16 +662,43 @@ baseline with a batch pass.
 
 ## Calibration
 
-Weights in `core/primitives/` are reasoned, not fitted. Nothing in this repo
-is a detection rate. Getting real numbers means:
+Weights in `core/primitives/` are reasoned, not fitted. No number in this
+repo is a field detection rate. Two tools turn that honesty into something
+you can measure.
 
-- Sliver or Havoc in a lab at 0 / 20 / 50 / 90% jitter → detection rate per level
-- a week of genuine traffic → false positives per host per day
-- then refit `periodicity.dispersion_decay`, `size_floor`, `count_saturation`,
-  and the jitter band
+**`tools/calibrate.py`** — a detection-rate-per-jitter curve against
+*synthetic* traffic driven through the real scorer. It synthesises a beacon
+at a controlled jitter level to a destination the baseline has never seen,
+plus benign background (exact-interval pollers and browsing to a few
+destinations every host contacts, so those are prevalent and should be
+suppressed), and reports detection per 0 / 20 / 50 / 90% jitter alongside the
+benign false-positive count:
 
-Thresholds are overridable without a patch:
-`--set periodicity.dispersion_decay=4.0`.
+```
+  jitter   detection
+     0%    100%  ████████████████████████
+    20%     93%  ██████████████████████
+    50%     37%  █████████
+    90%      7%  ██
+
+  false positives (benign background): 0  = 0.00 per host per hour
+```
+
+`--sweep periodicity.dispersion_decay=2:5:1` re-runs the whole measurement
+across a tunable range — the refit loop, without a patch. It is explicit in
+its own output that a number here is a property of the scorer against *this
+model*: the jitter is uniform where a real implant's may be patterned, and
+the background is modelled, not captured.
+
+**`tools/measure_false_positives.py`** — the other half, on a *real* capture:
+split it, warm the baseline on the first part, judge the second, and report
+false positives per host per hour with an assessability table so a zero is
+read as "measured" rather than "nothing fired".
+
+Getting field numbers still means Sliver or Havoc in a lab and a week of
+genuine traffic — but the loop that consumes them (measure → move a threshold
+→ measure again) now exists and is tested. Thresholds are overridable without
+a patch: `--set periodicity.dispersion_decay=4.0`.
 
 ## Roadmap
 

@@ -1,6 +1,6 @@
 <p align="center">
   <img src="assets/banner.svg" width="100%"
-       alt="tid-semantiQ — reads packet captures and narrates what is happening, encrypted or not">
+       alt="tid-semantiQ — who talked, to whom, how often, how much: readable through encryption">
 </p>
 
 # tid-semantiQ

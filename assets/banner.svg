@@ -1,72 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" role="img"
-     aria-label="tid-semantiQ — reads packet captures and narrates what is happening, encrypted or not">
-  <!-- self-contained banner: no external fonts, no scripts -->
-  <defs>
-    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#2dd4a7" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#2dd4a7" stop-opacity="0.25"/>
-    </linearGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 270" role="img"
+     aria-label="tid-semantiQ — who talked, to whom, how often, how much: readable through encryption.">
+  <rect width="1200" height="270" fill="#0a0d12"/>
 
-  <rect width="1200" height="240" fill="#0d1117"/>
-  <!-- faint ruled grid, like the report's section rules -->
-  <g stroke="#1b232c" stroke-width="1">
-    <line x1="0" y1="60"  x2="1200" y2="60"/>
-    <line x1="0" y1="120" x2="1200" y2="120"/>
-    <line x1="0" y1="180" x2="1200" y2="180"/>
+  <!-- ciphertext field with the questions the tool answers surfacing -->
+  <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="17"
+     letter-spacing="2">
+    <text x="70" y="58" fill="#242f3b">17 03 03 4a f1 9c
+      <tspan fill="#e8eef3" letter-spacing="2.5">WHO TALKED</tspan>
+      8b 02 d7 33 6e a9 c4 1f 58 e2 7d b0 49</text>
+    <text x="70" y="96" fill="#242f3b">6a de 91 05 cc 72 b8 e4
+      <tspan fill="#e8eef3" letter-spacing="2.5">TO WHOM</tspan>
+      3f 0a 96 51 dd 28 c7 84 1b ef</text>
+    <text x="70" y="134" fill="#242f3b">f2 47
+      <tspan fill="#e8eef3" letter-spacing="2.5">HOW OFTEN</tspan>
+      9e 63 b1 0c d8 75 2a
+      <tspan fill="#e8eef3" letter-spacing="2.5">HOW MUCH</tspan>
+      e7 38 c0 59</text>
+    <text x="70" y="172" fill="#242f3b">04 ba 6d f8 23
+      <tspan fill="#2dd4a7" letter-spacing="2.5">— READABLE THROUGH ENCRYPTION</tspan>
+      91 ce 47 a2</text>
   </g>
 
-  <!-- left: the capture — a packet timeline histogram with a pulse -->
-  <g transform="translate(70,40)">
-    <g fill="url(#fade)">
-      <rect x="0"   y="118" width="14" height="42" rx="2"/>
-      <rect x="22"  y="96"  width="14" height="64" rx="2"/>
-      <rect x="44"  y="58"  width="14" height="102" rx="2"/>
-      <rect x="66"  y="84"  width="14" height="76" rx="2"/>
-      <rect x="88"  y="30"  width="14" height="130" rx="2"/>
-      <rect x="110" y="70"  width="14" height="90" rx="2"/>
-      <rect x="132" y="104" width="14" height="56" rx="2"/>
-      <rect x="154" y="44"  width="14" height="116" rx="2"/>
-    </g>
-    <polyline points="0,110 22,88 44,52 66,78 88,24 110,64 132,98 154,38 176,80"
-              fill="none" stroke="#d4a24a" stroke-width="2.5"
-              stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>
-    <text x="0" y="178" font-family="ui-monospace,Menlo,Consolas,monospace"
-          font-size="12" fill="#5a6a78">capture</text>
-  </g>
+  <line x1="70" y1="198" x2="1130" y2="198" stroke="#1d2731" stroke-width="1.5"/>
 
-  <!-- the turn: capture becomes account -->
-  <g transform="translate(300,118)" fill="none" stroke="#3a4754"
-     stroke-width="2.5" stroke-linecap="round">
-    <line x1="0" y1="0" x2="40" y2="0"/>
-    <polyline points="31,-8 41,0 31,8"/>
-  </g>
-
-  <!-- right of arrow: the narration — ordered prose lines -->
-  <g transform="translate(386,52)" fill="#2b3842">
-    <rect x="0" y="0"   width="150" height="9" rx="4.5"/>
-    <rect x="0" y="22"  width="196" height="9" rx="4.5"/>
-    <rect x="0" y="44"  width="120" height="9" rx="4.5" fill="#d4a24a" opacity="0.85"/>
-    <rect x="0" y="66"  width="180" height="9" rx="4.5"/>
-    <rect x="0" y="88"  width="84"  height="9" rx="4.5"/>
-    <rect x="0" y="110" width="166" height="9" rx="4.5"/>
-    <text x="0" y="148" font-family="ui-monospace,Menlo,Consolas,monospace"
-          font-size="12" fill="#5a6a78">account</text>
-  </g>
-
-  <!-- wordmark -->
+  <!-- wordmark row -->
   <g font-family="ui-monospace,Menlo,Consolas,monospace">
-    <text x="660" y="104" font-size="52" font-weight="700" fill="#e6edf3">
-      tid-semanti<tspan fill="#2dd4a7">Q</tspan>
-    </text>
-    <text x="662" y="140" font-size="17" fill="#9fb0bf">
-      reads packet captures — narrates what is happening,
-    </text>
-    <text x="662" y="163" font-size="17" fill="#9fb0bf">
-      encrypted or not
-    </text>
-    <text x="662" y="196" font-size="13" fill="#5a6a78">
-      behaviour · names · shapes · printed arithmetic — no model writes a verdict
-    </text>
+    <text x="70" y="241" font-size="34" font-weight="700" fill="#e8eef3"
+          letter-spacing="-0.5">tid-semanti<tspan fill="#2dd4a7">Q</tspan></text>
+    <text x="1130" y="238" text-anchor="end" font-size="15" fill="#93a5b4">
+      reads packet captures — narrates what is happening · no model writes a verdict</text>
   </g>
 </svg>

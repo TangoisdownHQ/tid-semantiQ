@@ -10,6 +10,7 @@ differs. That is why the reader yields frames rather than owning the loop.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
@@ -212,6 +213,13 @@ class PcapSource(CaptureSource):
         yield from read_frames(self.path)
 
     def observations(self) -> Iterator[Observation]:
+        # Size of the capture file at open, to tell afterwards whether it
+        # grew while we read it — i.e. a running capture is still appending
+        # and this is a partial view. None for the live pseudo-path.
+        try:
+            self._size_at_open: Optional[int] = os.stat(self.path).st_size
+        except (OSError, ValueError):
+            self._size_at_open = None
         for frame_no, ts, linktype, frame in self.frames():
             self.stats["frames"] += 1
             # Fed the raw frame, before any decode: the whole point is to
@@ -230,7 +238,17 @@ class PcapSource(CaptureSource):
         # computed here rather than incrementally.
         self.stats["connections"] = self.connection_outcomes()
         self.stats["icmp_errors"] = self.icmp_errors()
-        self.stats["integrity"] = self._integrity.report()
+        integrity = self._integrity.report()
+        # Was the file still being written while we read it? A growing or
+        # just-written capture means this is a partial snapshot — merged into
+        # the integrity dict so it narrates in the CAPTURE ARTEFACTS section.
+        from capture.integrity import capture_liveness
+        liveness = capture_liveness(str(self.path),
+                                    getattr(self, "_size_at_open", None))
+        if liveness:
+            integrity.setdefault("frames", self.stats["frames"])
+            integrity.update(liveness)
+        self.stats["integrity"] = integrity
         # ARP/NDP pairings are authoritative on-link statements, so they
         # override the MAC inferred from IP-packet source addresses.
         macs = dict(self._host_macs)

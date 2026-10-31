@@ -31,13 +31,55 @@ below them can and cannot be trusted to mean.
 
 from __future__ import annotations
 
+import os
+import stat as _stat
 import struct
+import time
 from collections import deque
 from typing import Any, Dict, Optional
 
 from capture.decode import _strip_link
 
-__all__ = ["IntegrityTracker"]
+__all__ = ["IntegrityTracker", "capture_liveness"]
+
+#: A capture file written within this many seconds of being read is treated
+#: as possibly still in progress. Short enough not to flag a file saved a
+#: minute ago, long enough to catch one a running capture just flushed.
+_FRESH_WINDOW_S = 3.0
+
+
+def capture_liveness(path: str, size_before: Optional[int],
+                     now: Optional[float] = None,
+                     fresh_window_s: float = _FRESH_WINDOW_S) -> Dict[str, Any]:
+    """Whether a capture FILE looks like it is still being written.
+
+    Reading a pcap that a running capture is appending to analyses only the
+    bytes flushed so far — a partial snapshot that silently changes between
+    runs (which is exactly how a growing engagement capture misled a reader
+    once). Two signals, both about the file on disk rather than the traffic,
+    so wall-clock time is the honest clock here:
+
+      - it GREW while being read (size now exceeds the size at open) — proof
+        it is being written right now;
+      - it was last written within a few seconds of being read — a strong
+        hint the same.
+
+    Returns {} for anything that is not a regular file (a live `live:iface`
+    pseudo-path, a pipe), so the live path never false-flags itself.
+    """
+    try:
+        info = os.stat(path)
+    except (OSError, ValueError):
+        return {}
+    if not _stat.S_ISREG(info.st_mode):
+        return {}
+    out: Dict[str, Any] = {}
+    if size_before is not None and info.st_size > size_before:
+        out["growing_bytes"] = info.st_size - size_before
+    age = (now if now is not None else time.time()) - info.st_mtime
+    if 0.0 <= age < fresh_window_s:
+        out["last_written_s"] = round(age, 1)
+    return out
 
 #: A silent span this long inside a capture is reported as a gap. Chosen to
 #: be far above any burst spacing and below "the operator left for lunch".

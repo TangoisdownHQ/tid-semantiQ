@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 582 tests pass.
+**v0.1, working end-to-end.** 587 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -328,7 +328,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 582 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 587 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

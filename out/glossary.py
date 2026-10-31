@@ -883,7 +883,8 @@ GLOSSARY: List[Term] = [
     Term(
         "capture artefacts (snaplen, SPAN duplicates)",
         [r"\bsnaplen\b", r"CAPTURE ARTEFACTS", r"byte-identical",
-         r"SPAN port", r"\btruncated\b", r"timestamp earlier"],
+         r"SPAN port", r"\btruncated\b", r"timestamp earlier",
+         r"still writing", r"partial snapshot", r"being appended"],
         "Defects the capture apparatus adds to the record of the traffic.",
         "A capture file is a record made by a tool, and the tool leaves "
         "marks. A snaplen is a per-frame byte limit many capture tools "
@@ -897,7 +898,9 @@ GLOSSARY: List[Term] = [
         "freeze poison every interval measurement, and a long silent gap "
         "usually means the capture stopped and resumed. The report lists "
         "these artefacts before the measurements they would otherwise "
-        "quietly distort.",
+        "quietly distort. It also notices when the file is still being "
+        "written — a capture being appended to right now, so the analysis is "
+        "a partial snapshot that will change — and says so first of all.",
         see=["MTU", "exchange"],
     ),
     # ---- cleartext service announcements ----------------------------------

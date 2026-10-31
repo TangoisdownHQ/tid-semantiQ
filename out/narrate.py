@@ -1750,6 +1750,30 @@ def _capture_integrity(stats) -> List[str]:
     )
     frames = integrity.get("frames", 0)
 
+    # First, because it qualifies the entire report: if the file is still
+    # being written, everything below is a snapshot that will change.
+    if integrity.get("growing_bytes"):
+        out.append("")
+        out.append(f"  still writing  the file grew "
+                   f"{_bytes(integrity['growing_bytes'])} while it was being "
+                   "read")
+        out += _wrap(
+            "a capture is being appended to this file right now, so this "
+            "analysis is a PARTIAL snapshot — counts and findings will "
+            "change as more is written, and two runs will disagree. Re-read "
+            "it once the capture has stopped.",
+            indent="                 ",
+        )
+    elif integrity.get("last_written_s") is not None:
+        out.append("")
+        out.append(f"  recently written  last modified "
+                   f"{integrity['last_written_s']:g}s before it was read")
+        out += _wrap(
+            "the file may still be in progress; if so this is a partial "
+            "view. If the capture has stopped, this is nothing.",
+            indent="                 ",
+        )
+
     if integrity.get("truncated"):
         count = integrity["truncated"]
         missing = integrity.get("truncated_missing", 0)

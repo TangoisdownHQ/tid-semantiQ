@@ -170,6 +170,56 @@ def test_pcap_source_carries_integrity_into_the_narration():
     assert "2 of 2 frames" in text
 
 
+def test_capture_liveness_detects_a_growing_file():
+    from capture.integrity import capture_liveness
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "cap.pcap"
+        path.write_bytes(b"\x00" * 1000)
+        # opened at 400 bytes, now 1000 -> grew by 600 while being read
+        live = capture_liveness(str(path), size_before=400, now=1e12)
+        assert live["growing_bytes"] == 600
+        # opened at its current size -> not growing
+        assert "growing_bytes" not in capture_liveness(
+            str(path), size_before=1000, now=1e12)
+
+
+def test_capture_liveness_flags_a_just_written_file():
+    from capture.integrity import capture_liveness
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "cap.pcap"
+        path.write_bytes(b"\x00" * 100)
+        mtime = path.stat().st_mtime
+        # read 1s after it was last written -> fresh
+        fresh = capture_liveness(str(path), size_before=100, now=mtime + 1.0)
+        assert fresh.get("last_written_s") == 1.0
+        # read an hour later -> not fresh, and nothing else changed -> clean
+        assert capture_liveness(str(path), size_before=100,
+                                now=mtime + 3600) == {}
+
+
+def test_capture_liveness_ignores_non_files():
+    from capture.integrity import capture_liveness
+    # the live pseudo-path is not a regular file -> never false-flags
+    assert capture_liveness("live:eth0", size_before=0) == {}
+    assert capture_liveness("/does/not/exist", size_before=0) == {}
+
+
+def test_growing_capture_narrates_the_partial_warning():
+    stats = {"integrity": {"frames": 500, "growing_bytes": 65536}}
+    text = " ".join("\n".join(_capture_integrity(stats)).split())
+    assert "CAPTURE ARTEFACTS" in text
+    assert "still writing" in text
+    assert "PARTIAL snapshot" in text
+    assert "will change" in text
+
+
+def test_recently_written_narrates_a_softer_hint():
+    stats = {"integrity": {"frames": 500, "last_written_s": 1.2}}
+    text = " ".join("\n".join(_capture_integrity(stats)).split())
+    assert "recently written" in text
+    assert "partial view" in text
+
+
 def test_glossary_covers_capture_artefacts():
     from out.glossary import terms_in
     found = {t.term for _, t in terms_in(

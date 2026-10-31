@@ -242,6 +242,7 @@ def narrate(
     # Early, because it qualifies everything below it: a reader should know
     # the record is suspect before reading measurements computed from it.
     lines += _capture_integrity(stats)
+    lines += _neighbor_conflicts(stats)
     lines += _timeline(series, top_n)
     lines += _connections(stats, names, top_n)
     lines += _endpoints(series, names, top_n)
@@ -1802,6 +1803,38 @@ def _capture_integrity(stats) -> List[str]:
             "a gap is an artefact of the gap, not a behaviour.",
             indent="               ",
         )
+    return out
+
+
+def _neighbor_conflicts(stats) -> List[str]:
+    """Addresses that resolved to more than one MAC — the ARP-spoof signal.
+
+    Printed only when a conflict exists; the pairings themselves silently
+    improve device naming and need no section. A conflict is reported with
+    its competing claims, never as a verdict: the legitimate causes are real
+    and common.
+    """
+    neighbors = (stats or {}).get("neighbors") or {}
+    conflicts = neighbors.get("conflicts") or []
+    if not conflicts:
+        return []
+
+    out = _rule("ADDRESS / HARDWARE CONFLICTS")
+    out += _wrap(
+        "An IP that resolved to more than one hardware address during the "
+        "capture. This is the shape of ARP cache poisoning — a host answering "
+        "for an address that is not its own, to sit in the middle of its "
+        "traffic. It is also what a DHCP reassignment, a replaced network "
+        "card, or a router-redundancy protocol (VRRP/HSRP) produces, so it is "
+        "something to confirm, not a verdict.",
+    )
+    for conflict in conflicts[:8]:
+        out.append("")
+        out.append(f"  {conflict['ip']} claimed by "
+                   f"{len(conflict['claims'])} hardware addresses:")
+        for mac, source, first_ts, _last, count in conflict["claims"]:
+            when = f" from {_when(first_ts)}" if first_ts else ""
+            out.append(f"     {mac}  ({source}, {count:,} time(s){when})")
     return out
 
 

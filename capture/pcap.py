@@ -20,6 +20,7 @@ from capture.decode import (
     PROTO_ICMPV6,
     PROTO_TCP,
     PROTO_UDP,
+    arp_info,
     client_hello,
     decode_icmp,
     decode_ip,
@@ -27,6 +28,7 @@ from capture.decode import (
     decode_udp,
     dhcp_info,
     ethernet_src_mac,
+    ndp_pairings,
     dns_message,
     is_private,
     ntp_info,
@@ -181,6 +183,8 @@ class PcapSource(CaptureSource):
         self._icmp_errors: List[Dict[str, object]] = []
         from capture.integrity import IntegrityTracker
         self._integrity = IntegrityTracker()
+        from capture.neighbor import NeighborTable
+        self._neighbors = NeighborTable()
         #: UDP 4-tuples that produced a valid QUIC long header. A QUIC
         #: connection sends long headers only during its handshake; the
         #: bulk that follows is short-header packets, which carry no
@@ -227,7 +231,12 @@ class PcapSource(CaptureSource):
         self.stats["connections"] = self.connection_outcomes()
         self.stats["icmp_errors"] = self.icmp_errors()
         self.stats["integrity"] = self._integrity.report()
-        self.stats["host_macs"] = dict(self._host_macs)
+        # ARP/NDP pairings are authoritative on-link statements, so they
+        # override the MAC inferred from IP-packet source addresses.
+        macs = dict(self._host_macs)
+        macs.update(self._neighbors.pairings())
+        self.stats["host_macs"] = macs
+        self.stats["neighbors"] = self._neighbors.report()
         if self._http is not None:
             self.stats["http"] = (
                 self._http.stats["requests"] + self._http.stats["responses"]
@@ -256,6 +265,18 @@ class PcapSource(CaptureSource):
     def _handle_frame(
         self, frame_no: int, ts: float, linktype: int, frame: bytes
     ) -> List[Observation]:
+        # ARP first: it is not IP (EtherType 0x0806), so decode_ip would drop
+        # it, and with it the LAN's authoritative IP<->MAC statements. Not a
+        # scored channel — a capture-level fact, like connection outcomes.
+        arp = arp_info(linktype, frame)
+        if arp is not None:
+            self._neighbors.observe(arp.sender_ip, arp.sender_mac,
+                                    source="arp", ts=ts)
+            if arp.opcode == "reply":
+                self._neighbors.observe(arp.target_ip, arp.target_mac,
+                                        source="arp", ts=ts)
+            return []
+
         packet = decode_ip(linktype, frame)
         if packet is None:
             return []
@@ -300,6 +321,14 @@ class PcapSource(CaptureSource):
         "administratively prohibited" are identical at the TCP layer and
         mean entirely different things.
         """
+        # IPv6 neighbour discovery rides ICMPv6 and carries the same
+        # authoritative IP<->MAC pairings ARP does for v4 — recorded before
+        # the echo/error split below, which only concerns the other ICMP
+        # types.
+        for pair_ip, pair_mac in ndp_pairings(packet.proto, packet.payload,
+                                              packet.src):
+            self._neighbors.observe(pair_ip, pair_mac, source="ndp", ts=ts)
+
         message = decode_icmp(packet.proto, packet.payload)
         if message is None:
             return []

@@ -28,7 +28,8 @@ __all__ = ["IPPacket", "Segment", "DNS_RCODES", "decode_ip", "decode_tcp", "deco
            "DnsMessage", "DnsRecord", "decode_icmp", "IcmpMessage",
            "PROTO_ICMP", "PROTO_ICMPV6", "is_private", "scope_of",
            "ssh_banner", "ntp_info", "NtpInfo", "dhcp_info", "DhcpInfo",
-           "quic_info", "QuicInfo", "ethernet_src_mac"]
+           "quic_info", "QuicInfo", "ethernet_src_mac",
+           "arp_info", "ArpInfo", "ndp_pairings"]
 
 _ETHERTYPE_IPV4 = 0x0800
 _ETHERTYPE_IPV6 = 0x86DD
@@ -97,6 +98,106 @@ def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
         return IPPacket(src, dst, nxt, body)
 
     return None
+
+
+_ETHERTYPE_ARP = 0x0806
+
+
+def _eth_payload(linktype: int, frame: bytes, want: int) -> Optional[bytes]:
+    """Payload after the (possibly VLAN-tagged) Ethernet header, if its
+    ethertype is `want`. Factored so ARP reaches its bytes through the same
+    VLAN/QinQ unwrapping the IP path uses."""
+    if linktype != LINKTYPE_ETHERNET or len(frame) < 14:
+        return None
+    ethertype = struct.unpack(">H", frame[12:14])[0]
+    offset = 14
+    while ethertype in (_ETHERTYPE_VLAN, _ETHERTYPE_QINQ):
+        if len(frame) < offset + 4:
+            return None
+        ethertype = struct.unpack(">H", frame[offset + 2:offset + 4])[0]
+        offset += 4
+    return frame[offset:] if ethertype == want else None
+
+
+def _fmt_mac(raw: bytes) -> str:
+    return ":".join(f"{b:02x}" for b in raw)
+
+
+class ArpInfo(NamedTuple):
+    opcode: str                 # "request" | "reply" | "op-N"
+    sender_ip: str
+    sender_mac: str
+    target_ip: str
+    target_mac: str             # all-zero on a request; still reported
+
+
+def arp_info(linktype: int, frame: bytes) -> Optional[ArpInfo]:
+    """IPv4-over-Ethernet ARP, the LAN's own name-to-hardware directory.
+
+    ARP is not IP — it rides EtherType 0x0806 — so the IP decoder drops it,
+    and with it the single most authoritative IP<->MAC statement on the wire:
+    a reply says outright "address X is at hardware Y". Only IPv4-over-
+    Ethernet (htype 1, ptype 0x0800) is parsed; other hardware/protocol
+    pairings are rare and not what a LAN capture is asking about.
+
+    Because ARP only ever resolves ON-LINK addresses, every pairing it yields
+    is a local host — which is exactly the case where a MAC names the device
+    rather than the gateway, so these pairings are safe to trust where an
+    inferred source MAC on an off-link packet is not.
+    """
+    payload = _eth_payload(linktype, frame, _ETHERTYPE_ARP)
+    if payload is None or len(payload) < 28:
+        return None
+    htype, ptype, hlen, plen, oper = struct.unpack(">HHBBH", payload[0:8])
+    if htype != 1 or ptype != 0x0800 or hlen != 6 or plen != 4:
+        return None
+    sha = payload[8:14]
+    spa = payload[14:18]
+    tha = payload[18:24]
+    tpa = payload[24:28]
+    opcode = {1: "request", 2: "reply"}.get(oper, f"op-{oper}")
+    return ArpInfo(
+        opcode=opcode,
+        sender_ip=".".join(str(b) for b in spa),
+        sender_mac=_fmt_mac(sha),
+        target_ip=".".join(str(b) for b in tpa),
+        target_mac=_fmt_mac(tha),
+    )
+
+
+def ndp_pairings(proto: int, icmp_payload: bytes, src_ip: str):
+    """IPv6 neighbour-discovery IP<->MAC pairings, as a list of (ip, mac).
+
+    The IPv6 counterpart to ARP, carried in ICMPv6 Neighbor Solicitation
+    (135) and Advertisement (136). Two option types carry a link-layer
+    address: a source LLA (option 1) pairs with the packet's IPv6 source, a
+    target LLA (option 2) pairs with the advertised target address inside
+    the message. Like ARP, NDP is on-link, so its pairings name local hosts.
+    """
+    if proto != PROTO_ICMPV6 or len(icmp_payload) < 4:
+        return []
+    msg_type = icmp_payload[0]
+    if msg_type not in (135, 136):
+        return []
+    # NS and NA both carry: type/code/checksum (4) + reserved/flags (4) +
+    # target address (16), then TLV options.
+    if len(icmp_payload) < 24:
+        return []
+    target = str(ipaddress.IPv6Address(icmp_payload[8:24]))
+    pos = 24
+    pairings = []
+    while pos + 2 <= len(icmp_payload):
+        opt_type = icmp_payload[pos]
+        opt_len = icmp_payload[pos + 1] * 8      # length in 8-byte units
+        if opt_len == 0 or pos + opt_len > len(icmp_payload):
+            break
+        body = icmp_payload[pos + 2:pos + opt_len]
+        if opt_type == 1 and len(body) >= 6:          # source link-layer addr
+            pairings.append((src_ip, _fmt_mac(body[:6])))
+        elif opt_type == 2 and len(body) >= 6:        # target link-layer addr
+            pairings.append((target, _fmt_mac(body[:6])))
+        pos += opt_len
+    return pairings
 
 
 def ethernet_src_mac(linktype: int, frame: bytes) -> Optional[str]:

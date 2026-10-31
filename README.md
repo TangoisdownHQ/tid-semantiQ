@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 543 tests pass.
+**v0.1, working end-to-end.** 553 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -140,6 +140,15 @@ dependency.
   duplicates (a real retransmit differs in its IP header), a clock running
   backwards, and silent gaps — each printed early, with what it corrupts,
   and only when present: silence means checked-and-clean.
+- **Neighbour table (ARP / NDP)** — ARP replies and IPv6 neighbour
+  advertisements are the LAN stating which IP is at which hardware address.
+  ARP is not IP, so it was dropped before; parsed now, it gives an
+  authoritative on-link IP↔MAC map that feeds device naming (stronger than
+  a MAC inferred from an IP packet, and never confused with the gateway's).
+  One IP resolving to several MACs is surfaced as the ARP-cache-poisoning /
+  adversary-in-the-middle signal it is — with the innocent causes (DHCP
+  reassignment, a replaced card, router redundancy) named, so it reads as
+  something to confirm rather than a verdict.
 - **Capture diff** (`semantiq.py diff before.pcap after.pcap`) — new
   originating hosts, new endpoints, no-longer-contacted endpoints, new DNS
   zones, new TLS client stacks, volume shifts (ratio *and* absolute floor
@@ -291,7 +300,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 543 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 553 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

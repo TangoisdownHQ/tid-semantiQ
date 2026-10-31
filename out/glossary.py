@@ -782,6 +782,28 @@ GLOSSARY: List[Term] = [
         see=["cardinality / fanout", "rarity / prevalence"],
     ),
     Term(
+        "ARP / NDP (neighbour resolution)",
+        [r"\bARP\b", r"\bNDP\b", r"neighbour", r"neighbor",
+         r"hardware address(es)?", r"cache poisoning", r"ADDRESS / HARDWARE"],
+        "How a LAN maps an IP to a hardware address — and how that gets spoofed.",
+        "Before two machines on the same network segment can exchange a "
+        "packet, the sender must learn the recipient's hardware (MAC) "
+        "address for its IP. ARP does this for IPv4 and NDP (neighbour "
+        "discovery, over ICMPv6) for IPv6: a request asks 'who has this "
+        "address?' and the owner replies 'it is at this MAC'. Those replies "
+        "are the most authoritative IP-to-hardware statements on the wire, "
+        "and the tool collects them into a neighbour table that names local "
+        "devices. The same mechanism is a classic attack: because a host "
+        "will believe any reply, an attacker can answer for an address that "
+        "is not its own — usually the gateway's — and quietly sit in the "
+        "middle of the victim's traffic (ARP cache poisoning, a form of "
+        "adversary-in-the-middle). The tell is one IP resolving to more than "
+        "one MAC, which the report surfaces — alongside the innocent causes "
+        "(a reassigned DHCP lease, a replaced card, router redundancy) that "
+        "produce the same shape.",
+        see=["MAC / OUI vendor", "DHCP"],
+    ),
+    Term(
         "MAC / OUI vendor",
         [r"\bMAC\b", r"\bOUI\b", r"locally-administered", r"randomised",
          r"hardware vendor"],

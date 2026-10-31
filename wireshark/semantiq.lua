@@ -35,7 +35,8 @@ local f_title      = ProtoField.string("semantiq.title", "Finding")
 local f_severity   = ProtoField.string("semantiq.severity", "Severity")
 local f_confidence = ProtoField.string("semantiq.confidence", "Confidence")
 local f_source     = ProtoField.string("semantiq.source", "Analysed capture")
-proto.fields = { f_rule, f_title, f_severity, f_confidence, f_source }
+local f_bpf        = ProtoField.string("semantiq.bpf", "Capture filter (re-capture this flow)")
+proto.fields = { f_rule, f_title, f_severity, f_confidence, f_source, f_bpf }
 
 proto.prefs.datafile = Pref.string(
     "annotations file",
@@ -151,6 +152,13 @@ function proto.dissector(buffer, pinfo, tree)
         subtree:add(f_severity, hit.severity or "?"):set_generated()
         subtree:add(f_confidence,
                     string.format("%.2f", hit.confidence or 0)):set_generated()
+        if hit.bpf ~= nil and hit.bpf ~= "" then
+            -- The capture filter to re-capture this flow live. Shown as a
+            -- field so it can be selected and copied, and applied as a
+            -- column; Wireshark's Lua has no clipboard call to make it one
+            -- keystroke, so "there where you need it" is the honest promise.
+            subtree:add(f_bpf, hit.bpf):set_generated()
+        end
     end
 end
 
@@ -183,6 +191,9 @@ if gui_enabled() then
                         "[%-8s] %.2f  %s\n           %s  ->  " .. filter_fmt,
                         hit.severity or "?", hit.confidence or 0,
                         hit.title or "?", hit.rule or "?", key)
+                    if hit.bpf ~= nil and hit.bpf ~= "" then
+                        lines[#lines + 1] = "           capture:  " .. hit.bpf
+                    end
                 end
             end
         end

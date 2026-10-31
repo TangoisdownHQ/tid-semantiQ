@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from core.model import Finding
+from out.bpf import bpf_for_finding
 
 __all__ = ["write_lua_annotations", "parse_display_filter"]
 
@@ -114,13 +115,19 @@ def write_lua_annotations(
             bucket[number].append(finding)
 
     def _entry(finding: Finding) -> str:
+        # The capture filter travels with the finding so the plugin's summary
+        # can show "re-capture this flow" right where the analyst meets it —
+        # built from the channel by the same code the --bpf sink uses.
+        bpf = bpf_for_finding(finding) or ""
         return (
-            "{ rule = %s, title = %s, severity = %s, confidence = %.2f }"
+            "{ rule = %s, title = %s, severity = %s, confidence = %.2f, "
+            "bpf = %s }"
             % (
                 _lua_string(finding.rule_id),
                 _lua_string(finding.title),
                 _lua_string(finding.severity.name),
                 finding.confidence,
+                _lua_string(bpf),
             )
         )
 

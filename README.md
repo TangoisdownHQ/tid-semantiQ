@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 563 tests pass.
+**v0.1, working end-to-end.** 569 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -117,6 +117,15 @@ dependency.
 - **Streaming mode** (`--stream`) — sliding windows on an event-time clock,
   bounded memory, and an advisory when the window is too short to hold the
   cadences present.
+- **eBPF flow tier** (`semantiq.py monitor`) — for a link too fast for
+  per-packet capture: an eBPF/XDP program aggregates per flow in the kernel
+  and emits one JSON record per burst, and `monitor` runs the same
+  behavioural scorer on that trickle. A deliberately lower-fidelity tier —
+  timing, volume, direction and ports (so cadence, asymmetry, fanout, rarity
+  and beacon/exfil/scan still work), but no payload, so no content or
+  TLS-shape analysis, and it says so. The kernel half is a documented,
+  operator-compiled contract (`capture/bpf/`); a tshark bridge produces the
+  same records so the path runs today without building anything.
 - **TLS client reading** — which *library* a host's TLS handshakes are
   consistent with, from cleartext shape alone: GREASE presence (browsers
   send it, library stacks mostly don't), ALPN, and list lengths, read as a
@@ -311,7 +320,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 563 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 569 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

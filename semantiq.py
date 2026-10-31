@@ -269,6 +269,48 @@ def cmd_live(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_monitor(args: argparse.Namespace) -> int:
+    """Interpret a kernel flow feed — behavioural analysis at line rate.
+
+    The lower-fidelity tier: an eBPF/XDP program (see capture/bpf/) aggregates
+    per-flow in the kernel and emits one JSON record per burst; this reads
+    them and runs the SAME behavioural scorer the pcap path does. No payload
+    crosses the contract, so content and TLS-shape analyses do not apply —
+    said plainly rather than left as a quiet empty section.
+    """
+    from capture.ebpf import EbpfSource, read_jsonl_flows
+
+    redactor = passthrough if args.unsafe_show_secrets else redact_secrets
+    if args.from_file:
+        path = Path(args.from_file)
+        if not path.exists():
+            print(f"no such flow feed: {path}", file=sys.stderr)
+            return 2
+        lines = path.open("r", encoding="utf-8", errors="replace")
+    else:
+        lines = sys.stdin
+    print("monitor: behavioural tier (eBPF flow feed). Timing, volume and "
+          "direction only — no payload, so no content or TLS-shape analysis.",
+          file=sys.stderr)
+
+    source = EbpfSource(read_jsonl_flows(lines))
+
+    if args.stream:
+        return _read_streaming(args, source.observations, redactor, [source])
+
+    series = list(group_into_series(
+        source.observations(), min_observations=2, min_by_domain=_pruning_floors()
+    ))
+    print(f"\n{source.describe()}", file=sys.stderr)
+    if not series:
+        print("no flows to analyse — the feed was empty or every line was "
+              "malformed. Expected newline-delimited JSON; see capture/bpf/.",
+              file=sys.stderr)
+        return 1
+    return _analyse_and_report(
+        args, series, dict(source.stats), redactor, source_name="ebpf-monitor")
+
+
 def _analyse_and_report(args, series, stats, redactor, source_name: str) -> int:
     """Score, report and narrate a materialised series list.
 
@@ -1192,6 +1234,25 @@ def main(argv=None) -> int:
     )
     _add_shared_flags(live)
     live.set_defaults(func=cmd_live)
+
+    monitor = sub.add_parser(
+        "monitor",
+        help="interpret an eBPF/XDP flow feed (behavioural tier, line rate)",
+        description=(
+            "Read newline-delimited JSON flow records (one per burst) from a "
+            "kernel eBPF/XDP program and run the behavioural scorer on them. "
+            "For a link too fast for per-packet capture. A lower-fidelity "
+            "tier: timing, volume and direction only — no payload, so no "
+            "content or TLS-shape analysis. See capture/bpf/ for the kernel "
+            "half and the record contract."
+        ),
+    )
+    monitor.add_argument(
+        "--from", dest="from_file", metavar="PATH",
+        help="read flow records from a file instead of stdin",
+    )
+    _add_shared_flags(monitor)
+    monitor.set_defaults(func=cmd_monitor)
 
     args = parser.parse_args(argv)
     try:

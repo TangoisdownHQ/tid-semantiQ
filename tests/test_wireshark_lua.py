@@ -88,6 +88,8 @@ def test_streams_and_frames_land_in_their_buckets():
     assert 'severity = "HIGH"' in text
     assert "confidence = 0.80" in text
     assert 'source = "t.pcap"' in text
+    # the capture filter travels with each finding for the plugin's summary
+    assert 'bpf = "host 10.0.0.5 and host 203.0.113.9 and tcp port 443"' in text
 
 
 def test_unannotatable_findings_are_counted_not_hidden():

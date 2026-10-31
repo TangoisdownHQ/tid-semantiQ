@@ -47,6 +47,10 @@ class IPPacket(NamedTuple):
     dst: str
     proto: int
     payload: bytes
+    #: IPv4 TTL / IPv6 hop limit. Carried for passive OS fingerprinting: the
+    #: value a packet arrives with, minus the hops it crossed, points back at
+    #: the sender's initial TTL (64/128/255), which is OS-characteristic.
+    ttl: int = 0
 
 
 class Segment(NamedTuple):
@@ -57,6 +61,10 @@ class Segment(NamedTuple):
     ack: bool = False
     fin: bool = False
     rst: bool = False
+    #: TCP receive window and raw options, read for passive fingerprinting.
+    #: Only meaningful on a SYN / SYN-ACK, where the OS states its defaults.
+    window: int = 0
+    options: bytes = b""
 
 
 def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
@@ -73,13 +81,14 @@ def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
         if ihl < 20 or len(data) < ihl:
             return None
         total_len = struct.unpack(">H", data[2:4])[0]
+        ttl = data[8]
         proto = data[9]
         src = str(ipaddress.IPv4Address(data[12:16]))
         dst = str(ipaddress.IPv4Address(data[16:20]))
         # Trust the header length over the buffer: trailing padding is common
         # on short frames and would otherwise be counted as payload.
         end = total_len if 0 < total_len <= len(data) else len(data)
-        return IPPacket(src, dst, proto, data[ihl:end])
+        return IPPacket(src, dst, proto, data[ihl:end], ttl=ttl)
 
     if version == 6:
         if len(data) < 40:
@@ -88,6 +97,7 @@ def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
         nxt = data[6]
         src = str(ipaddress.IPv6Address(data[8:24]))
         dst = str(ipaddress.IPv6Address(data[24:40]))
+        hop_limit = data[7]
         body = data[40:40 + payload_len] if payload_len else data[40:]
         # Walk the extension-header chain to reach the transport header.
         # Without this, any packet carrying a routing or options header
@@ -97,7 +107,7 @@ def decode_ip(linktype: int, frame: bytes) -> Optional[IPPacket]:
                 return None
             ext_len = (body[1] + 1) * 8
             nxt, body = body[0], body[ext_len:]
-        return IPPacket(src, dst, nxt, body)
+        return IPPacket(src, dst, nxt, body, ttl=hop_limit)
 
     return None
 
@@ -309,6 +319,11 @@ def decode_tcp(data: bytes) -> Optional[Segment]:
     if offset < 20 or len(data) < offset:
         return None
     flags = data[13]
+    window = struct.unpack(">H", data[14:16])[0]
+    # Options sit between the fixed 20-byte header and the data offset. Only
+    # the SYN/SYN-ACK ones matter (MSS, window scale, SACK-OK, timestamps,
+    # and their order) — the raw bytes are handed on for osfp to parse.
+    options = data[20:offset] if offset > 20 else b""
     return Segment(
         sport=sport,
         dport=dport,
@@ -317,6 +332,8 @@ def decode_tcp(data: bytes) -> Optional[Segment]:
         ack=bool(flags & 0x10),
         fin=bool(flags & 0x01),
         rst=bool(flags & 0x04),
+        window=window,
+        options=options,
     )
 
 

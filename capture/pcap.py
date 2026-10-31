@@ -196,6 +196,8 @@ class PcapSource(CaptureSource):
         #: device-vendor naming. Public addresses are never recorded — see
         #: _handle_frame for why.
         self._host_macs: Dict[str, str] = {}
+        #: address -> its TCP SYN fingerprint, for passive OS inference.
+        self._os_fp: Dict[str, dict] = {}
         self.stats = {"frames": 0, "decoded": 0, "tcp": 0, "udp": 0, "dns": 0,
                       "http": 0, "icmp": 0}
 
@@ -255,6 +257,7 @@ class PcapSource(CaptureSource):
         macs.update(self._neighbors.pairings())
         self.stats["host_macs"] = macs
         self.stats["neighbors"] = self._neighbors.report()
+        self.stats["os_fingerprints"] = dict(self._os_fp)
         if self._http is not None:
             self.stats["http"] = (
                 self._http.stats["requests"] + self._http.stats["responses"]
@@ -477,6 +480,13 @@ class PcapSource(CaptureSource):
             flow.syn = True
         elif segment.syn and segment.ack and direction is Direction.INGRESS:
             flow.synack = True
+        # Passive OS fingerprint: a SYN or SYN-ACK is where a stack states its
+        # defaults (TTL, window, options). Keyed on the sender (packet.src),
+        # first-seen wins — a host's stack does not change between its SYNs.
+        if segment.syn and packet.src not in self._os_fp:
+            from capture.osfp import tcp_signature
+            self._os_fp[packet.src] = tcp_signature(
+                packet.ttl, segment.window, segment.options)
         if segment.rst:
             flow.rst = True
         if segment.fin:

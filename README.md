@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 587 tests pass.
+**v0.1, working end-to-end.** 597 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -140,6 +140,14 @@ dependency.
   coarse hedged family — never a product name, never intent. Two distinct
   stacks from one host is itself called out: two pieces of software are
   originating TLS. The utls caveat prints with every reading.
+- **Passive OS fingerprint** — a host states its operating system's
+  defaults in the first packet of every TCP connection, in the clear: the
+  TTL it starts from, the receive window, the MSS, and which TCP options it
+  offers in what order. From the SYN alone the tool infers a coarse stack
+  family (Linux/macOS/BSD · Windows · appliance) and the hop distance
+  (rounding the arriving TTL up to the nearest 64/128/255) — shown with the
+  numbers it rests on, never an exact version. Works on fully encrypted
+  traffic, and a non-default MSS betrays a tunnel/VPN.
 - **Cleartext service metadata** — protocols that state real facts without
   a key. SSH names its software in the identification banner before
   encrypting (both sides); NTP's header says who asked whom for time and
@@ -328,7 +336,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 587 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 597 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

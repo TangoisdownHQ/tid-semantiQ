@@ -252,8 +252,9 @@ def narrate(
     # Hosts before endpoints: "what did this host do" is the question a
     # reader has first, and on a multi-host capture it had no section.
     host_macs = (stats or {}).get("host_macs") or {}
-    lines += _host_detail(series, names, by_key, top_n, enricher, host_macs)
-    lines += _endpoint_detail(series, names, by_key, top_n, enricher)
+    os_fp = (stats or {}).get("os_fingerprints") or {}
+    lines += _host_detail(series, names, by_key, top_n, enricher, host_macs, os_fp)
+    lines += _endpoint_detail(series, names, by_key, top_n, enricher, os_fp)
     lines += _zone_detail(series, by_key, top_n)
     # Per-exchange detail last among the measurement sections: it is the
     # longest output and the most specific, so it follows the aggregates
@@ -437,8 +438,36 @@ def _addresses_itself(target: str, address: str,
     return bare in (address, known) or target in (address, known)
 
 
+def _os_line(os_fp, address) -> Optional[str]:
+    """A one-line passive OS reading for an address, or None.
+
+    Shared by the host and endpoint dossiers. The inference is shown, not
+    just the verdict: the arriving TTL, the initial it implies, the hop
+    distance, and the MSS — so a reader can check the reasoning. A shape the
+    classifier does not recognise still prints its raw signals rather than a
+    guess.
+    """
+    sig = (os_fp or {}).get(address)
+    if not sig:
+        return None
+    from capture.osfp import classify
+    family = classify(sig)
+    detail = []
+    if sig.get("initial_ttl") and sig.get("hops") is not None:
+        detail.append(f"TTL {sig['ttl']}→{sig['initial_ttl']}, "
+                      f"~{sig['hops']} hop(s)")
+    elif sig.get("ttl"):
+        detail.append(f"TTL {sig['ttl']}")
+    if sig.get("mss"):
+        detail.append(f"MSS {sig['mss']}")
+    tail = ("  ·  " + " · ".join(detail)) if detail else ""
+    if family:
+        return f"{family}{tail}"
+    return f"unrecognised stack{tail}" if detail else None
+
+
 def _host_detail(series, names, by_key, top_n, enricher=None,
-                 host_macs=None) -> List[str]:
+                 host_macs=None, os_fp=None) -> List[str]:
     """One block per originating host: everything IT did.
 
     THE GAP THIS FILLS. Every other dossier is organised by the address that
@@ -560,6 +589,10 @@ def _host_detail(series, names, by_key, top_n, enricher=None,
             elif mac.split(":")[0] and int(mac.split(":")[0], 16) & 0x02:
                 out.append(f"    {'device':<12} {mac} — randomised "
                            "(locally-administered MAC, names no vendor)")
+
+        os_reading = _os_line(os_fp, who)
+        if os_reading:
+            out.append(f"    {'stack':<12} {os_reading}")
 
         out.append(
             f"    {'volume':<12} {_bytes(entry['out'])} sent, "
@@ -705,7 +738,8 @@ def _host_detail(series, names, by_key, top_n, enricher=None,
     return out
 
 
-def _endpoint_detail(series, names, by_key, top_n, enricher=None) -> List[str]:
+def _endpoint_detail(series, names, by_key, top_n, enricher=None,
+                     os_fp=None) -> List[str]:
     """One block per endpoint: address, names, transport, volume, measurements.
 
     WHY SEPARATE BLOCKS. Everything else in this report is organised by
@@ -849,6 +883,10 @@ def _endpoint_detail(series, names, by_key, top_n, enricher=None) -> List[str]:
         scope = _scope(address)
         if scope:
             out.append(f"    {'scope':<12} {scope}")
+
+        os_reading = _os_line(os_fp, address)
+        if os_reading:
+            out.append(f"    {'stack':<12} {os_reading}")
 
         # Offline enrichment: who announces this address, and which cloud
         # it sits in. The wording is deliberate — an ASN names who announces

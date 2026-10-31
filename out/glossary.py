@@ -827,6 +827,26 @@ GLOSSARY: List[Term] = [
         see=["MAC / OUI vendor", "DHCP"],
     ),
     Term(
+        "passive OS fingerprint (TTL, SYN)",
+        [r"\bTTL\b", r"initial.ttl", r"\bhops?\b", r"passive.*fingerprint",
+         r"\bSYN\b.*stack", r"TTL \d+→"],
+        "Inferring a host's operating system from the first packet's defaults.",
+        "A machine states its operating system's defaults in the opening "
+        "packet of every TCP connection, in the clear, however encrypted the "
+        "rest is: the TTL it starts counting from, the receive window it "
+        "advertises, the maximum segment size, and which TCP options it "
+        "offers and in what order. Those defaults differ between stacks "
+        "enough to separate Linux from Windows from a BSD or a network "
+        "appliance. The TTL is the strongest tell: a packet's TTL has been "
+        "decremented once per router it crossed, so the arriving value is "
+        "below where the sender began — rounding up to the nearest common "
+        "start (64, 128, 255) recovers the initial, and the difference is "
+        "the hop distance. Like the TLS client reading, this reports a "
+        "coarse family, never an exact version, and shows the numbers it "
+        "rests on so the inference can be checked rather than trusted.",
+        see=["SYN", "TLS client fingerprint (GREASE, ALPN)"],
+    ),
+    Term(
         "MAC / OUI vendor",
         [r"\bMAC\b", r"\bOUI\b", r"locally-administered", r"randomised",
          r"hardware vendor"],

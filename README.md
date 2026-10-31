@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 570 tests pass.
+**v0.1, working end-to-end.** 573 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -320,7 +320,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 570 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 573 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py
@@ -336,6 +336,16 @@ No third-party Python dependencies. `core/` is stdlib-only on purpose, so
 primitives stay portable if the capture loop ever moves to Rust. The
 behavioural pass and cleartext HTTP need nothing at all; `tshark` is required
 only to decrypt TLS (`--http --keylog`) or to read HTTP/2.
+
+**Platforms.** File analysis and every output (`read`, `diff`, `monitor`,
+and the `--json` / `--html` / `--bpf` / `--wireshark-lua` / colorfilters
+sinks) are pure stdlib and run anywhere Python 3 does — Linux, macOS,
+Windows. `live` capture works on all three: it shells to `dumpcap` (or
+`tcpdump`), so on Windows install Wireshark — which provides `dumpcap.exe`
+and the Npcap driver — and name the interface by its `dumpcap -D` index
+(`semantiq.py live 1`). The eBPF `monitor` *producer* (`capture/bpf/flowmon`)
+is Linux-kernel-only, but `monitor` itself just reads the JSON flow feed and
+runs anywhere.
 
 ## What it looks like
 

@@ -318,6 +318,61 @@ def test_the_tool_does_not_need_root():
         assert forbidden not in text, forbidden
 
 
+def test_process_isolation_is_platform_correct():
+    """start_new_session is a POSIX setsid; Windows has no such call and uses
+    a creation flag. Picking the wrong one leaves the capture child with no
+    process-group isolation, so Ctrl-C would race it."""
+    import os as _os
+    from capture.live import LiveSource
+
+    saved = _os.name
+    try:
+        _os.name = "posix"
+        assert LiveSource._isolation_kwargs() == {"start_new_session": True}
+        _os.name = "nt"
+        kwargs = LiveSource._isolation_kwargs()
+        assert "creationflags" in kwargs and "start_new_session" not in kwargs
+    finally:
+        _os.name = saved
+
+
+def test_windows_gets_an_npcap_message_and_no_posix_calls():
+    """On Windows the missing-tool guidance names Npcap, and the permission
+    check must not reach for grp/geteuid, which do not exist there."""
+    import os as _os
+    import capture.live as live
+
+    saved = _os.name
+    try:
+        _os.name = "nt"
+        assert "Npcap" in live._no_tool_message()
+        # Must not raise despite grp/geteuid being POSIX-only; the nt branch
+        # never touches them. (geteuid exists on this Linux host, so the only
+        # way this crashes on real Windows is reaching the posix block.)
+        live._permission_note()
+    finally:
+        _os.name = saved
+    # the POSIX message still reads as before, so the Linux test above holds
+    _os.name = "posix" if hasattr(_os, "geteuid") else saved
+    try:
+        assert "does not run as root" in live._no_tool_message()
+    finally:
+        _os.name = saved
+
+
+def test_a_numeric_interface_index_is_never_rejected():
+    """dumpcap/tcpdump accept a bare index, which is the usual way to name an
+    interface on Windows — preflight must not reject it even when it is not in
+    the parsed name list."""
+    from capture.live import preflight
+    try:
+        preflight("999999")   # not a real index, but a digit — not rejected
+    except CaptureUnavailable as error:
+        # only acceptable failure here is "no capture program", never
+        # "no interface named"
+        assert "no interface named" not in str(error), error
+
+
 def _run_all():
     import traceback
 

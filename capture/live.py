@@ -31,6 +31,7 @@ identically live and from a file. There is no second implementation to drift.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -62,13 +63,43 @@ def available_tools() -> List[str]:
 def list_interfaces() -> List[str]:
     """Interfaces the system reports, for an error message that helps.
 
-    Read from /sys rather than by asking dumpcap, so naming a bad interface
-    produces an immediate answer instead of a subprocess failure.
+    `/sys/class/net` is the fast, clean source and is used where it exists
+    (Linux). Elsewhere — Windows, macOS — there is no such directory, so the
+    capture tool's own `-D` listing is parsed instead, which also gives a
+    Windows user the device names dumpcap expects.
     """
     try:
-        return sorted(os.listdir("/sys/class/net"))
+        names = sorted(os.listdir("/sys/class/net"))
+        if names:
+            return names
     except OSError:
+        pass
+    return _interfaces_via_tool()
+
+
+def _interfaces_via_tool() -> List[str]:
+    """Interface names from `dumpcap -D` / `tcpdump -D`, best-effort.
+
+    Used only to make an error message helpful, never to hard-reject, so a
+    parse that misses a device simply yields a shorter hint rather than a
+    false "no such interface".
+    """
+    tool = (available_tools() or [None])[0]
+    if tool is None:
         return []
+    try:
+        result = subprocess.run([tool, "-D"], capture_output=True,
+                                text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    names = []
+    for line in result.stdout.splitlines():
+        # dumpcap: "1. eth0" / "1. \Device\NPF_{...} (Ethernet)"
+        # tcpdump: "1.eth0 [Up, Running]"
+        match = re.match(r"\s*\d+[.)]?\s*(\S+)", line)
+        if match:
+            names.append(match.group(1))
+    return names
 
 
 class LiveSource(PcapSource):
@@ -116,11 +147,7 @@ class LiveSource(PcapSource):
     def _command(self) -> List[str]:
         tool = self.tool or (available_tools() or [None])[0]
         if tool is None:
-            raise CaptureUnavailable(
-                "no capture program found. Install wireshark-cli (for "
-                "dumpcap) or tcpdump. This tool does not capture directly "
-                "and does not run as root."
-            )
+            raise CaptureUnavailable(_no_tool_message())
         if tool == "dumpcap":
             # -P forces classic pcap on stdout. -q silences the packet
             # counter, which would otherwise interleave with the report.
@@ -142,6 +169,24 @@ class LiveSource(PcapSource):
             command += [self.bpf]
         return command
 
+    @staticmethod
+    def _isolation_kwargs() -> dict:
+        """Put the capture child in its own process group so Ctrl-C reaches
+        this process and the child is stopped deliberately, not raced.
+
+        The mechanism is platform-specific: POSIX does it with a new session
+        (setsid, via start_new_session); Windows has no setsid, so it uses
+        the CREATE_NEW_PROCESS_GROUP creation flag instead. Passing
+        start_new_session on Windows would be silently ignored, leaving no
+        isolation at all — hence the split."""
+        if os.name == "nt":
+            # getattr because the constant only exists on a Windows
+            # interpreter; defined-away to 0 elsewhere so the branch is
+            # inspectable without crashing a non-Windows Python.
+            return {"creationflags":
+                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+        return {"start_new_session": True}
+
     def start(self) -> None:
         command = self._command()
         try:
@@ -149,9 +194,7 @@ class LiveSource(PcapSource):
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                # Its own process group, so Ctrl-C reaches this process and
-                # the child is stopped deliberately rather than racing it.
-                start_new_session=True,
+                **self._isolation_kwargs(),
             )
         except (OSError, FileNotFoundError) as error:
             raise CaptureUnavailable(
@@ -271,32 +314,68 @@ def preflight(iface: str) -> None:
     cause is buried. Both are cheap to check up front.
     """
     interfaces = list_interfaces()
-    if interfaces and iface not in interfaces:
+    # A bare integer is a valid interface selector for dumpcap/tcpdump (and
+    # the usual way to name one on Windows), so never reject a digit even
+    # when it is not in the parsed name list.
+    if interfaces and iface not in interfaces and not iface.isdigit():
         raise CaptureUnavailable(
             f"no interface named {iface!r}. Available: "
             + ", ".join(interfaces)
         )
     if not available_tools():
-        raise CaptureUnavailable(
-            "no capture program found. Install wireshark-cli (dumpcap) or "
-            "tcpdump."
-        )
-    if shutil.which("dumpcap"):
-        # Capture needs CAP_NET_RAW, which dumpcap normally carries. Where
-        # it does not, the failure is a permissions error that reads like a
-        # bug, so say what to do about it instead.
-        import grp
+        raise CaptureUnavailable(_no_tool_message())
+    _permission_note()
 
-        try:
-            members = set(grp.getgrnam("wireshark").gr_mem)
-        except KeyError:
-            return
-        user = os.environ.get("USER") or ""
-        if user and user not in members and os.geteuid() != 0:
-            # Not fatal — the capability may be granted some other way.
+
+def _no_tool_message() -> str:
+    """Platform-specific guidance for a missing capture program."""
+    if os.name == "nt":
+        return (
+            "no capture program found. Install Wireshark for Windows, which "
+            "provides dumpcap.exe (and the Npcap driver capture needs), and "
+            "make sure its folder is on PATH. This tool does not capture "
+            "directly."
+        )
+    return (
+        "no capture program found. Install wireshark-cli (for dumpcap) or "
+        "tcpdump. This tool does not capture directly and does not run as root."
+    )
+
+
+def _permission_note() -> None:
+    """Warn about the thing that most often blocks capture, per platform.
+
+    The POSIX path is the 'wireshark' group that grants dumpcap its
+    capability; `grp` and `geteuid` live only there, so the whole block is
+    guarded to POSIX and Windows gets the Npcap note instead.
+    """
+    if os.name != "posix":
+        if os.name == "nt" and shutil.which("dumpcap"):
             print(
-                f"note: {user} is not in the 'wireshark' group; if capture "
-                f"fails, that is why (usermod -aG wireshark {user}, then "
-                f"log out and back in)",
+                "note: live capture on Windows needs the Npcap driver "
+                "(installed with Wireshark). If capture fails with a "
+                "permissions error, reinstall Npcap with 'Support raw "
+                "802.11' / admin as needed.",
                 file=sys.stderr,
             )
+        return
+    if not shutil.which("dumpcap"):
+        return
+    # Capture needs CAP_NET_RAW, which dumpcap normally carries. Where it does
+    # not, the failure is a permissions error that reads like a bug, so say
+    # what to do about it instead.
+    import grp
+
+    try:
+        members = set(grp.getgrnam("wireshark").gr_mem)
+    except KeyError:
+        return
+    user = os.environ.get("USER") or ""
+    if user and user not in members and os.geteuid() != 0:
+        # Not fatal — the capability may be granted some other way.
+        print(
+            f"note: {user} is not in the 'wireshark' group; if capture "
+            f"fails, that is why (usermod -aG wireshark {user}, then "
+            f"log out and back in)",
+            file=sys.stderr,
+        )

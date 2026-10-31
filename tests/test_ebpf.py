@@ -159,6 +159,40 @@ def test_bridge_infers_direction_without_local():
     assert rec.proto == "udp" and rec.dport == 53
 
 
+def test_c_producer_and_python_consumer_agree_on_the_contract():
+    """Compile capture/bpf/selftest.c with an ordinary compiler, run it, and
+    feed its JSON back through read_jsonl_flows. This is the one thing that
+    could silently break the live XDP feed — the struct/formatter and the
+    parser disagreeing on the wire format — so it is pinned here even though
+    the eBPF program itself cannot be built or loaded in CI."""
+    import shutil
+    cc = shutil.which("clang") or shutil.which("cc") or shutil.which("gcc")
+    if cc is None:
+        print("        (no C compiler on PATH — contract check skipped)")
+        return
+    bpf_dir = ROOT / "capture" / "bpf"
+    with tempfile.TemporaryDirectory() as d:
+        binary = Path(d) / "selftest"
+        build = subprocess.run(
+            [cc, "-O2", "-I", str(bpf_dir), str(bpf_dir / "selftest.c"),
+             "-o", str(binary)], capture_output=True, text=True)
+        assert build.returncode == 0, build.stderr
+        run = subprocess.run([str(binary)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    records = list(read_jsonl_flows(run.stdout.splitlines()))
+    assert len(records) == 2, run.stdout
+    egress, ingress = records
+    # the C formatter and the Python parser agree, field for field
+    assert egress.saddr == "10.0.0.5" and egress.daddr == "203.0.113.9"
+    assert egress.proto == "tcp" and egress.dport == 443 and egress.bytes == 256
+    assert egress.direction == "egress" and egress.packets == 1
+    assert ingress.proto == "udp" and ingress.direction == "ingress"
+    assert ingress.sport == 443 and ingress.bytes == 1400
+    # and the records drive the adapter: an ingress record puts the LOCAL
+    # end (its daddr) as the channel initiator, as the scorer expects.
+    assert flow_observation(ingress).channel.initiator.value == "10.0.0.5"
+
+
 def _run_all():
     import traceback
 

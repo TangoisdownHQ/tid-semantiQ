@@ -65,29 +65,52 @@ tshark -r capture.pcap -T fields -e frame.time_epoch -e ip.src -e ip.dst \
   | python3 semantiq.py monitor
 ```
 
-## The production path: an eBPF/XDP kernel program
+## The production path: the eBPF/XDP program (`flowmon`)
 
-For line rate, the producer is a kernel program against this same contract —
-so `monitor` does not change. The design:
+For line rate the producer is a kernel program against this same contract, so
+`monitor` does not change. It is bundled here as source — `flowmon.bpf.c`
+(the eBPF program), `flowmon.c` (the userspace loader), `flowmon.h` (the
+shared record and its JSON formatter), and a `Makefile` — to compile on the
+host you will run it on:
 
-1. **Attach** an XDP program on ingress and a tc/clsact program on egress (XDP
-   alone sees only ingress). CO-RE + libbpf keeps one object portable across
-   kernels.
-2. **Parse** Ethernet → IP → TCP/UDP far enough for the 5-tuple and the IP
-   length. Non-IP and fragments are counted and skipped.
-3. **Aggregate** in a `BPF_MAP_TYPE_HASH` keyed by the 5-tuple, each value a
-   `{start_ts, last_ts, bytes, packets, dport, dir}`. On each packet: if
-   `now - last_ts > gap`, push the finished burst to a `BPF_MAP_TYPE_RINGBUF`
-   and start a new one; otherwise accumulate. A sweep (a `BPF_MAP_TYPE_TIMER`
-   or a userspace tick) flushes bursts idle past the gap.
-4. **Emit** from a tiny userspace loop that reads the ringbuf and prints each
-   record as one JSON line — the bytes `monitor` consumes.
+```bash
+# Debian/Ubuntu: sudo apt install clang llvm libbpf-dev bpftool
+# Arch:          sudo pacman -S clang llvm libbpf bpf
+cd capture/bpf && make                 # builds ./flowmon
 
-This half is the operator's: it needs root (`CAP_BPF`/`CAP_NET_ADMIN`), a
-current kernel, and a build toolchain, and it is **not exercised by this
-repository's test suite** — the tested, load-bearing parts are the contract,
-the `capture/ebpf.py` adapter, and `monitor` itself, so any conforming
-producer (XDP, the bridge above, or your own) interoperates unchanged.
+sudo ./flowmon eth0 | python3 ../../semantiq.py monitor --stream \
+    --baseline ~/.semantiq/home.db
+```
+
+How it works:
+
+1. **Two hooks, one object.** `SEC("xdp") flowmon_xdp` runs on **ingress** —
+   the line-rate fast path, before the kernel even builds an `sk_buff`.
+   `SEC("tc") flowmon_tc` runs on **egress**, because XDP cannot see egress
+   and the outbound callback is the whole point of beacon detection. Both
+   share the maps below.
+2. **Parse** Ethernet → IPv4 → TCP/UDP far enough for the 5-tuple and the
+   length. Non-IPv4 is skipped (IPv6 is a documented follow-on).
+3. **Aggregate** in an LRU hash keyed by the 5-tuple + direction, each value
+   `{first_ns, last_ns, bytes, packets}`. On each packet: if `now - last_ns`
+   exceeds the gap, push the finished burst to a ring buffer and start a new
+   one; otherwise accumulate.
+4. **Emit** from the loader's ring-buffer loop, which renders each burst with
+   `flow_event_to_json` (in `flowmon.h`) — the exact bytes `monitor` reads.
+
+Neither the eBPF program nor the loader is exercised by the repository's test
+suite: building them needs a BPF toolchain and running them needs root and a
+current kernel, neither of which CI assumes. What **is** tested is the piece
+that could silently break the feed — the record/JSON contract itself:
+`make selftest` compiles `selftest.c` with an ordinary compiler and prints
+sample records, and `tests/test_ebpf.py` runs it and checks they round-trip
+through `read_jsonl_flows` into one channel key. So any conforming producer —
+`flowmon`, the tshark bridge above, or your own — interoperates unchanged.
+
+`XDP` note: XDP needs driver support for its fastest "native" mode; without
+it the kernel runs the program in a slightly slower "generic" mode, still far
+below per-packet userspace capture. `flowmon` never drops or alters a packet
+(`XDP_PASS`/`TC_ACT_OK`) — it only measures.
 
 ## Why not bundle a compiled program?
 

@@ -18,13 +18,18 @@ from pathlib import Path
 from typing import Iterator, Tuple
 
 __all__ = ["read_frames", "read_stream", "LINKTYPE_ETHERNET", "LINKTYPE_RAW", "LINKTYPE_LINUX_SLL",
-           "LINKTYPE_LINUX_SLL2", "LINKTYPE_NULL"]
+           "LINKTYPE_LINUX_SLL2", "LINKTYPE_NULL",
+           "LINKTYPE_IEEE802_11", "LINKTYPE_IEEE802_11_RADIOTAP"]
 
 LINKTYPE_NULL = 0
 LINKTYPE_ETHERNET = 1
 LINKTYPE_RAW = 101
 LINKTYPE_LINUX_SLL = 113
 LINKTYPE_LINUX_SLL2 = 276
+#: Monitor-mode Wi-Fi. 105 is bare 802.11; 127 prepends a radiotap header
+#: carrying the radio metadata (channel, signal) the adapter adds.
+LINKTYPE_IEEE802_11 = 105
+LINKTYPE_IEEE802_11_RADIOTAP = 127
 
 _PCAP_MAGICS = {
     0xA1B2C3D4: ("<", 1_000_000),      # little-endian, microseconds

@@ -17,6 +17,8 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 from core.suffixes import party
 from capture.pcapfile import (
     LINKTYPE_ETHERNET,
+    LINKTYPE_IEEE802_11,
+    LINKTYPE_IEEE802_11_RADIOTAP,
     LINKTYPE_LINUX_SLL,
     LINKTYPE_LINUX_SLL2,
     LINKTYPE_NULL,
@@ -243,6 +245,59 @@ def _strip_link(linktype: int, frame: bytes) -> Optional[bytes]:
         return frame[16:] if len(frame) > 16 else None
     if linktype == LINKTYPE_LINUX_SLL2:
         return frame[20:] if len(frame) > 20 else None
+    if linktype == LINKTYPE_IEEE802_11_RADIOTAP:
+        # radiotap: version(1,=0) pad(1) len(2, little-endian) — the whole
+        # header length, so we skip it without parsing the radio fields and
+        # hand the 802.11 frame on. (Channel/signal live in those fields and
+        # are a documented follow-on.)
+        if len(frame) < 8:
+            return None
+        rt_len = struct.unpack("<H", frame[2:4])[0]
+        if rt_len < 8 or len(frame) < rt_len:
+            return None
+        return _strip_dot11(frame[rt_len:])
+    if linktype == LINKTYPE_IEEE802_11:
+        return _strip_dot11(frame)
+    return None
+
+
+def _strip_dot11(data: bytes) -> Optional[bytes]:
+    """An 802.11 DATA frame's IP payload, or None.
+
+    Only data frames carry IP; management (beacons, probes, deauth) and
+    control frames do not, and are left for a Wi-Fi metadata layer to read.
+    A Protected (WPA) data frame's payload is ciphertext with no LLC header,
+    so it yields nothing here — the honest Wi-Fi parallel to an encrypted TLS
+    record. The header length is variable: a 4-address (WDS) frame adds an
+    address, a QoS subtype adds a QoS-control field, and HT control adds four
+    more; each is accounted for before the LLC/SNAP shim that precedes the IP.
+    """
+    if len(data) < 2:
+        return None
+    fc0, fc1 = data[0], data[1]
+    ftype = (fc0 >> 2) & 0x03
+    subtype = (fc0 >> 4) & 0x0F
+    if ftype != 2:                 # 2 = data; 0 = management, 1 = control
+        return None
+    if fc1 & 0x40:                 # Protected: WPA-encrypted, no plaintext LLC
+        return None
+
+    header = 24
+    if (fc1 & 0x01) and (fc1 & 0x02):   # ToDS and FromDS: 4-address frame
+        header += 6
+    is_qos = bool(subtype & 0x08)
+    if is_qos:
+        header += 2                      # QoS Control
+        if fc1 & 0x80:                   # Order bit: HT Control present
+            header += 4
+    # LLC/SNAP shim: AA AA 03 00 00 00 <ethertype>, then the IP packet.
+    if len(data) < header + 8:
+        return None
+    if data[header:header + 6] != b"\xaa\xaa\x03\x00\x00\x00":
+        return None
+    ethertype = struct.unpack(">H", data[header + 6:header + 8])[0]
+    if ethertype in (_ETHERTYPE_IPV4, _ETHERTYPE_IPV6):
+        return data[header + 8:]
     return None
 
 

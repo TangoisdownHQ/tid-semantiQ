@@ -782,6 +782,29 @@ GLOSSARY: List[Term] = [
         see=["cardinality / fanout", "rarity / prevalence"],
     ),
     Term(
+        "802.11 / monitor mode / radiotap",
+        [r"802\.11", r"monitor mode", r"\bradiotap\b", r"\bWi-?Fi\b",
+         r"\bBSSID\b", r"\bSSID\b"],
+        "Capturing Wi-Fi off the air, and the headers that wrap those frames.",
+        "An ordinary Wi-Fi capture, taken while associated to an access "
+        "point, arrives already stripped to Ethernet-looking frames — the "
+        "tool reads it like any wired capture. Monitor mode is different: the "
+        "adapter listens to raw 802.11 frames on a channel, including other "
+        "devices' traffic and the management frames (beacons, probes, "
+        "deauthentications) that never appear once a link is up. Those frames "
+        "carry a radiotap header — the radio's own metadata, channel and "
+        "signal strength, prepended by the capture — ahead of the 802.11 "
+        "header proper. The tool parses both to reach the IP inside a data "
+        "frame; but a data frame on a WPA network is encrypted, its payload "
+        "ciphertext with no readable structure, exactly like a TLS record — "
+        "so on a protected network the meaning is in the metadata (who is "
+        "present, what networks devices look for, deauth floods) rather than "
+        "the payload. Monitor-mode capture reaches other people's "
+        "communications and is governed by different law than reading your "
+        "own traffic.",
+        see=["encrypted traffic", "MAC / OUI vendor"],
+    ),
+    Term(
         "ARP / NDP (neighbour resolution)",
         [r"\bARP\b", r"\bNDP\b", r"neighbour", r"neighbor",
          r"hardware address(es)?", r"cache poisoning", r"ADDRESS / HARDWARE"],

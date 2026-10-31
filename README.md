@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 573 tests pass.
+**v0.1, working end-to-end.** 582 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -114,6 +114,14 @@ dependency.
   because a loopback capture and a capture on a shared segment are different
   acts in law. Bound with `--duration` / `--frames`, or Ctrl-C, which stops
   the capture and reports what was seen rather than discarding it.
+- **Wi-Fi / 802.11 captures** — a monitor-mode capture arrives as
+  radiotap-wrapped 802.11 frames, not Ethernet; both are now decoded, so the
+  IP traffic inside a data frame flows through the whole stack like any other
+  capture. Honest about its limits: a WPA-protected data frame's payload is
+  ciphertext with no readable structure — the Wi-Fi parallel to an encrypted
+  TLS record — so on a protected network the meaning is in the metadata, not
+  the payload. (Management-frame intelligence — SSIDs, probe requests, deauth
+  floods — is the next step; the link layer is the foundation it needs.)
 - **Streaming mode** (`--stream`) — sliding windows on an event-time clock,
   bounded memory, and an advisory when the window is too short to hold the
   cadences present.
@@ -320,7 +328,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 573 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 582 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

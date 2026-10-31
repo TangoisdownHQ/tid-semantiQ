@@ -386,6 +386,13 @@ def _analyse_and_report(args, series, stats, redactor, source_name: str) -> int:
     if args.filters:
         write_filters(Path(args.filters), findings)
         print(f"wrote {args.filters}", file=sys.stderr)
+    if getattr(args, "bpf", None):
+        from out.bpf import write_bpf
+        produced, skipped = write_bpf(Path(args.bpf), findings)
+        note = f" ({skipped} finding(s) have no packet-level flow)" if skipped else ""
+        print(f"wrote {args.bpf} ({produced} capture filter(s)){note} — "
+              "hand to `dumpcap -f`, `tcpdump`, or `live --filter`",
+              file=sys.stderr)
     if args.out == "soc":
         if not (args.soc_url and args.soc_key):
             print("--out soc needs --soc-url and --soc-key", file=sys.stderr)
@@ -862,6 +869,7 @@ def _add_shared_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json")
     parser.add_argument("--colorfilters")
     parser.add_argument("--filters")
+    parser.add_argument("--bpf", metavar="PATH")
     parser.add_argument("--explain", action="store_true")
     parser.add_argument("--explain-capture", action="store_true")
     parser.add_argument("--explain-limit", type=int, default=10)
@@ -1107,6 +1115,12 @@ def main(argv=None) -> int:
     )
     read.add_argument("--colorfilters", help="write a Wireshark colorfilters file")
     read.add_argument("--filters", help="write plain display filters, one per line")
+    read.add_argument(
+        "--bpf", metavar="PATH",
+        help="write a BPF capture filter per finding (and a combined one), to "
+             "re-capture the flagged flows live: `dumpcap -f`, `tcpdump`, or "
+             "`live --filter`. Matches flows by address/port, not exact packets.",
+    )
     read.add_argument("--out", choices=("report", "soc"), default="report")
     read.add_argument("--soc-url",
                       help="HTTP event-collector endpoint (JSON via POST)")

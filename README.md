@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 553 tests pass.
+**v0.1, working end-to-end.** 563 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -180,6 +180,13 @@ dependency.
   whole vocabulary the rules can emit is covered, and a completeness test
   walks the ontologies so a new rule citing an unexplained code fails the
   suite.
+- **BPF capture filters** (`--bpf`) — a libpcap capture filter per finding
+  (and a combined one), built from the flow's addresses and transport, to
+  re-capture the flagged flows live: `dumpcap -f`, `tcpdump`, or `live
+  --filter`. Distinct from the Wireshark display filter, which selects
+  packets after capture by stream/frame index — a capture filter runs in the
+  kernel and can only name what is on the wire, so it matches the flow, not
+  the exact packets, and says so.
 - **Wireshark plugin** (`wireshark/semantiq.lua` + `--wireshark-lua`) — the
   findings inside Wireshark itself, as a post-dissector: filter on
   `semantiq.severity`, add `semantiq.title` as a column, read each packet's
@@ -245,6 +252,10 @@ python3 semantiq.py read capture.pcap --baseline b.db \
 python3 semantiq.py read capture.pcap --wireshark-lua capture.pcap.lua
 SEMANTIQ_ANNOTATIONS=capture.pcap.lua wireshark capture.pcap   # then filter: semantiq
 
+# BPF capture filters to re-capture the flagged flows live
+python3 semantiq.py read capture.pcap --bpf flows.bpf
+semantiq.py live eth0 --filter "$(grep -A1 '^# combined' flows.bpf | tail -1)"
+
 # ship into the SOC
 python3 semantiq.py read capture.pcap --baseline b.db --out soc \
     --soc-url https://soc.example/collector/logs --soc-key "$SOC_API_KEY"
@@ -300,7 +311,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 553 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 563 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

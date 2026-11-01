@@ -169,6 +169,106 @@ def test_glossary_covers_wifi():
     assert "802.11 / monitor mode / radiotap" in found
 
 
+# --------------------------------------------------------------------------
+# management-frame intelligence (beacons, probes, deauth)
+# --------------------------------------------------------------------------
+
+
+def _ssid_tag(ssid: str) -> bytes:
+    raw = ssid.encode()
+    return bytes([0, len(raw)]) + raw
+
+
+def _mgmt(subtype: int, sa: str, da: str, bssid: str, body: bytes) -> bytes:
+    fc0 = (subtype << 4) | (0 << 2)          # type 0 = management
+    frame = bytes([fc0, 0x00]) + b"\x00\x00"  # FC + duration
+    for mac in (da, sa, bssid):
+        frame += bytes.fromhex(mac.replace(":", ""))
+    frame += b"\x00\x00"                      # sequence control
+    return frame + body
+
+
+def _beacon(bssid: str, ssid: str) -> bytes:
+    body = b"\x00" * 8 + b"\x64\x00" + b"\x01\x04"   # timestamp, interval, cap
+    body += _ssid_tag(ssid)
+    return _mgmt(0x8, bssid, "ff:ff:ff:ff:ff:ff", bssid, body)
+
+
+def _probe_req(client: str, ssid: str) -> bytes:
+    return _mgmt(0x4, client, "ff:ff:ff:ff:ff:ff", "ff:ff:ff:ff:ff:ff",
+                 _ssid_tag(ssid))
+
+
+def _deauth(src: str, dst: str) -> bytes:
+    return _mgmt(0xC, src, dst, src, b"\x07\x00")     # reason 7
+
+
+def test_wifi_monitor_reads_beacons_probes_deauths():
+    from capture.wifi import WifiMonitor
+    mon = WifiMonitor()
+    for _ in range(5):
+        mon.observe(_beacon("aa:bb:cc:00:00:01", "CorpWiFi"))
+    mon.observe(_beacon("aa:bb:cc:00:00:02", ""))          # hidden SSID
+    mon.observe(_probe_req("de:ad:be:ef:00:01", "HomeNet"))
+    mon.observe(_probe_req("de:ad:be:ef:00:01", ""))       # broadcast probe
+    for _ in range(9):
+        mon.observe(_deauth("aa:bb:cc:00:00:01", "de:ad:be:ef:00:01"))
+    rep = mon.report()
+    assert rep["aps"]["aa:bb:cc:00:00:01"]["ssid"] == "CorpWiFi"
+    assert rep["aps"]["aa:bb:cc:00:00:01"]["beacons"] == 5
+    assert rep["aps"]["aa:bb:cc:00:00:02"]["ssid"] == "<hidden>"
+    probes = rep["probes"]["de:ad:be:ef:00:01"]
+    assert probes["HomeNet"] == 1 and probes["<broadcast>"] == 1
+    assert rep["deauths"]["total"] == 9
+
+
+def test_data_and_control_frames_are_ignored_by_the_monitor():
+    from capture.wifi import WifiMonitor
+    mon = WifiMonitor()
+    mon.observe(_dot11_data(_ipv4_udp()))      # a data frame
+    mon.observe(bytes([0xD4, 0x00]) + b"\x00" * 10)   # an ACK (control)
+    assert mon.report() == {}
+
+
+def test_wireless_section_reaches_the_report():
+    import tempfile
+    from capture.base import group_into_series
+    from capture.pcap import PcapSource
+    from out.narrate import narrate
+
+    frames = [
+        _radiotap(_beacon("aa:bb:cc:00:00:01", "CorpWiFi")),
+        _radiotap(_beacon("aa:bb:cc:00:00:01", "CorpWiFi")),
+        _radiotap(_probe_req("de:ad:be:ef:00:01", "HomeNet")),
+    ] + [_radiotap(_deauth("aa:bb:cc:00:00:01", "de:ad:be:ef:00:01"))
+         for _ in range(20)]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "wifi.pcap"
+        with open(path, "wb") as h:
+            h.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535,
+                                LINKTYPE_IEEE802_11_RADIOTAP))
+            for i, fr in enumerate(frames):
+                h.write(struct.pack("<IIII", 1_700_000_000 + i, 0,
+                                    len(fr), len(fr)))
+                h.write(fr)
+        src = PcapSource(path)
+        series = list(src.observations())   # no IP series; that's fine
+        text = narrate(series, [], stats=src.stats, source_name="wifi.pcap")
+    flat = " ".join(text.split())
+    assert "WIRELESS (802.11 management)" in flat
+    assert "CorpWiFi" in flat
+    assert "HomeNet" in flat
+    assert "deauth / disassoc 20 frame(s)" in flat   # flattened single space
+    assert "denial-of-service" in flat          # the honest caveat
+
+
+def test_glossary_covers_wifi_management_vocab():
+    from out.glossary import terms_in
+    found = {t.term for _, t in terms_in(
+        "beacons name access points; a deauth flood; probe request SSIDs")}
+    assert "802.11 / monitor mode / radiotap" in found
+
+
 def _run_all():
     import traceback
 

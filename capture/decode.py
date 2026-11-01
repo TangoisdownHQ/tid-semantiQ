@@ -31,7 +31,7 @@ __all__ = ["IPPacket", "Segment", "DNS_RCODES", "decode_ip", "decode_tcp", "deco
            "PROTO_ICMP", "PROTO_ICMPV6", "is_private", "scope_of",
            "ssh_banner", "ntp_info", "NtpInfo", "dhcp_info", "DhcpInfo",
            "quic_info", "QuicInfo", "ethernet_src_mac",
-           "arp_info", "ArpInfo", "ndp_pairings"]
+           "arp_info", "ArpInfo", "ndp_pairings", "dot11_frame"]
 
 _ETHERTYPE_IPV4 = 0x0800
 _ETHERTYPE_IPV6 = 0x86DD
@@ -268,6 +268,25 @@ def _strip_link(linktype: int, frame: bytes) -> Optional[bytes]:
         return _strip_dot11(frame[rt_len:])
     if linktype == LINKTYPE_IEEE802_11:
         return _strip_dot11(frame)
+    return None
+
+
+def dot11_frame(linktype: int, frame: bytes) -> Optional[bytes]:
+    """The raw 802.11 frame (radiotap stripped), or None if not Wi-Fi.
+
+    `_strip_link` reaches the IP inside a DATA frame; this returns the whole
+    802.11 frame instead, so the Wi-Fi management layer can read the beacons,
+    probes and deauthentications that carry no IP at all.
+    """
+    if linktype == LINKTYPE_IEEE802_11:
+        return frame if len(frame) >= 2 else None
+    if linktype == LINKTYPE_IEEE802_11_RADIOTAP:
+        if len(frame) < 8:
+            return None
+        rt_len = struct.unpack("<H", frame[2:4])[0]
+        if rt_len < 8 or len(frame) < rt_len + 2:
+            return None
+        return frame[rt_len:]
     return None
 
 

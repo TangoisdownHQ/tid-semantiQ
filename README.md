@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 597 tests pass.
+**v0.1, working end-to-end.** 601 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -120,8 +120,12 @@ dependency.
   capture. Honest about its limits: a WPA-protected data frame's payload is
   ciphertext with no readable structure — the Wi-Fi parallel to an encrypted
   TLS record — so on a protected network the meaning is in the metadata, not
-  the payload. (Management-frame intelligence — SSIDs, probe requests, deauth
-  floods — is the next step; the link layer is the foundation it needs.)
+  the payload. **Management-frame intelligence** reads exactly that: the
+  beacons naming the access points and SSIDs in the air, the probe requests
+  in which a device leaks the networks it has joined before (fingerprinting
+  it), and deauthentication frames — a flood of which is the classic Wi-Fi
+  denial-of-service and the opening of an evil-twin or handshake-capture
+  attack, reported with the caveat that normal disconnects deauth too.
 - **Streaming mode** (`--stream`) — sliding windows on an event-time clock,
   bounded memory, and an advisory when the window is too short to hold the
   cadences present.
@@ -336,7 +340,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 597 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 601 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

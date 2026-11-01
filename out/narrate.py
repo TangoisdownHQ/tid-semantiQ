@@ -243,6 +243,7 @@ def narrate(
     # the record is suspect before reading measurements computed from it.
     lines += _capture_integrity(stats)
     lines += _neighbor_conflicts(stats)
+    lines += _wireless(stats)
     lines += _timeline(series, top_n)
     lines += _connections(stats, names, top_n)
     lines += _endpoints(series, names, top_n)
@@ -1864,6 +1865,62 @@ def _capture_integrity(stats) -> List[str]:
             "rotated file, a disconnected interface. A cadence that spans "
             "a gap is an artefact of the gap, not a behaviour.",
             indent="               ",
+        )
+    return out
+
+
+def _wireless(stats) -> List[str]:
+    """Wi-Fi management-frame intelligence, from a monitor-mode capture.
+
+    Printed only when management frames were seen. The networks in the air,
+    the networks devices are looking for (which fingerprints them), and the
+    deauthentication count — the last with the standing caveat that normal
+    disconnects deauth too, so a flood is a lead, not a verdict.
+    """
+    wifi = (stats or {}).get("wireless") or {}
+    if not wifi:
+        return []
+
+    out = _rule("WIRELESS (802.11 management)")
+    out += _wrap(
+        "Read from the clear-text management frames of a monitor-mode "
+        "capture — no payload was decrypted. On a protected network this is "
+        "where the meaning is.",
+    )
+
+    aps = wifi.get("aps") or {}
+    if aps:
+        out.append("")
+        out.append(f"  access points  {len(aps)} seen")
+        for bssid, ap in sorted(aps.items(),
+                                key=lambda kv: -kv[1].get("beacons", 0))[:8]:
+            ssid = ap.get("ssid") or "<no SSID tag>"
+            out.append(f"     {bssid}  {ssid}  ({ap.get('beacons', 0):,} beacon(s))")
+
+    probes = wifi.get("probes") or {}
+    if probes:
+        out.append("")
+        out.append(f"  probe requests {len(probes)} client(s) looking for "
+                   "networks — each named network is one the device has "
+                   "joined before")
+        for client, ssids in sorted(probes.items(),
+                                    key=lambda kv: -sum(kv[1].values()))[:8]:
+            wanted = ", ".join(name for name, _c in
+                               Counter(ssids).most_common(6))
+            out.append(f"     {client}  →  {wanted}")
+
+    deauths = wifi.get("deauths") or {}
+    if deauths.get("total"):
+        out.append("")
+        out.append(f"  deauth / disassoc  {deauths['total']:,} frame(s)")
+        for (src, dst), count in deauths.get("pairs", [])[:5]:
+            out.append(f"     {count:>6,}  {src} → {dst}")
+        out += _wrap(
+            "a few of these are normal — a roam, a shutdown. A flood is the "
+            "classic Wi-Fi denial-of-service, and the opening move of an "
+            "evil-twin or handshake-capture attack. The count is a lead to "
+            "confirm against its rate and targets, not a verdict.",
+            indent="                 ",
         )
     return out
 

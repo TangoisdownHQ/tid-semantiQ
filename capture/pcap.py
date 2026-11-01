@@ -28,6 +28,7 @@ from capture.decode import (
     decode_tcp,
     decode_udp,
     dhcp_info,
+    dot11_frame,
     ethernet_src_mac,
     ndp_pairings,
     dns_message,
@@ -39,7 +40,11 @@ from capture.decode import (
 )
 from capture.http1 import looks_like_http
 from capture.httpobs import HttpTracker
-from capture.pcapfile import read_frames
+from capture.pcapfile import (
+    LINKTYPE_IEEE802_11,
+    LINKTYPE_IEEE802_11_RADIOTAP,
+    read_frames,
+)
 from capture.tlsinfo import (
     RecordWalker,
     cert_visibility,
@@ -186,6 +191,8 @@ class PcapSource(CaptureSource):
         self._integrity = IntegrityTracker()
         from capture.neighbor import NeighborTable
         self._neighbors = NeighborTable()
+        from capture.wifi import WifiMonitor
+        self._wifi = WifiMonitor()
         #: UDP 4-tuples that produced a valid QUIC long header. A QUIC
         #: connection sends long headers only during its handshake; the
         #: bulk that follows is short-header packets, which carry no
@@ -258,6 +265,7 @@ class PcapSource(CaptureSource):
         self.stats["host_macs"] = macs
         self.stats["neighbors"] = self._neighbors.report()
         self.stats["os_fingerprints"] = dict(self._os_fp)
+        self.stats["wireless"] = self._wifi.report()
         if self._http is not None:
             self.stats["http"] = (
                 self._http.stats["requests"] + self._http.stats["responses"]
@@ -297,6 +305,14 @@ class PcapSource(CaptureSource):
                 self._neighbors.observe(arp.target_ip, arp.target_mac,
                                         source="arp", ts=ts)
             return []
+
+        # On a Wi-Fi capture, read the clear-text management frames (beacons,
+        # probes, deauths) for their metadata before the IP path — they carry
+        # no IP, so decode_ip would drop them and their meaning with them.
+        if linktype in (LINKTYPE_IEEE802_11, LINKTYPE_IEEE802_11_RADIOTAP):
+            dot11 = dot11_frame(linktype, frame)
+            if dot11 is not None:
+                self._wifi.observe(dot11)
 
         packet = decode_ip(linktype, frame)
         if packet is None:

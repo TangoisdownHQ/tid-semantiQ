@@ -784,7 +784,8 @@ GLOSSARY: List[Term] = [
     Term(
         "802.11 / monitor mode / radiotap",
         [r"802\.11", r"monitor mode", r"\bradiotap\b", r"\bWi-?Fi\b",
-         r"\bBSSID\b", r"\bSSID\b"],
+         r"\bBSSID\b", r"\bSSID\b", r"\bbeacons?\b", r"probe request",
+         r"\bdeauth", r"disassoc", r"access points?"],
         "Capturing Wi-Fi off the air, and the headers that wrap those frames.",
         "An ordinary Wi-Fi capture, taken while associated to an access "
         "point, arrives already stripped to Ethernet-looking frames — the "
@@ -797,9 +798,13 @@ GLOSSARY: List[Term] = [
         "header proper. The tool parses both to reach the IP inside a data "
         "frame; but a data frame on a WPA network is encrypted, its payload "
         "ciphertext with no readable structure, exactly like a TLS record — "
-        "so on a protected network the meaning is in the metadata (who is "
-        "present, what networks devices look for, deauth floods) rather than "
-        "the payload. Monitor-mode capture reaches other people's "
+        "so on a protected network the meaning is in the management frames, "
+        "which stay in the clear: beacons naming the access points and their "
+        "SSIDs, probe requests in which a device leaks the networks it has "
+        "joined before (fingerprinting it), and deauthentications — a flood "
+        "of which is the classic Wi-Fi denial-of-service and the opening of "
+        "an evil-twin or handshake-capture attack. Monitor-mode capture "
+        "reaches other people's "
         "communications and is governed by different law than reading your "
         "own traffic.",
         see=["encrypted traffic", "MAC / OUI vendor"],

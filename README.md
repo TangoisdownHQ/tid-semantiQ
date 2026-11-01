@@ -30,13 +30,17 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 601 tests pass.
+**v0.1, working end-to-end.** 607 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
   hostnames, per-protocol detail, a dossier per endpoint and per DNS zone, the
   ranked primitive measurements, and an explicit list of what could *not* be
-  measured and why. Suppress with `--no-narrative`; widen with `--top N`.
+  measured and why. It opens with a one-line **verdict** — "a host-side
+  capture: one host reaching one destination over 36.9 min, mostly TCP/TLS;
+  all of it encrypted (TLS 1.3)" — synthesised from the same measured values
+  the sections below report, so the gist up top can never contradict the
+  detail. Suppress with `--no-narrative`; widen with `--top N`.
 - **Behavioural analysis** (`net`, `dns`) from metadata alone, no dependencies
   — cadence, jitter, volume asymmetry, cardinality, rarity, outcome failure
   rate.
@@ -340,7 +344,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 601 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 607 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

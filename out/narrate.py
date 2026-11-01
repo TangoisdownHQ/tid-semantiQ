@@ -235,7 +235,10 @@ def narrate(
     names = _names(series)
     lines: List[str] = []
 
-    # Prose first. The tables are the evidence for it and a reader who stops
+    # One line first of all: what kind of capture is this? A reader who
+    # stops after the first sentence should still have the gist.
+    lines += _verdict(series, stats, names)
+    # Prose next. The tables are the evidence for it and a reader who stops
     # after the first screen should still have been told what the capture is.
     lines += _interpretation(series, by_key, stats, top_n)
     lines += _overview(series, stats, source_name)
@@ -1769,6 +1772,107 @@ def _trace_detail(obs) -> str:
 #: Timeline buckets. Twelve rows covers a capture of any length at a glance
 #: without becoming a chart nobody reads in a terminal.
 _BINS = 12
+
+
+#: Protocol domain -> the plain word for it in the one-line verdict.
+_DOMAIN_WORD = {
+    "net": "TCP/TLS", "dns": "DNS", "http": "HTTP",
+    "modbus": "Modbus", "dnp3": "DNP3", "mavlink": "MAVLink", "icmp": "ICMP",
+}
+
+
+def _verdict(series, stats, names) -> List[str]:
+    """One plain-English sentence classifying the whole capture.
+
+    Synthesised from the same measured values the sections below report —
+    originators, destinations, protocol mix, encryption, span — so the gist
+    at the top cannot say anything the detail contradicts. A reader who stops
+    after this line still knows what they are looking at.
+    """
+    stats = stats or {}
+    if not series and not (stats.get("wireless")):
+        return []
+
+    inits = {s.channel.initiator.value for s in series if s.channel.initiator}
+    resps = {s.channel.responder.value for s in series if s.channel.responder}
+    starts = [s.start for s in series if s.start is not None]
+    ends = [s.end for s in series if s.end is not None]
+    span = (max(ends) - min(starts)) if starts and ends else 0.0
+
+    domains: Counter = Counter()
+    total = enc = 0
+    tls13 = False
+    for one in series:
+        domains[one.channel.domain] += one.count
+        for obs in one:
+            total += 1
+            if obs.attrs.get("encrypted"):
+                enc += 1
+            if str(obs.attrs.get("tls_version", "")).startswith("TLS 1.3"):
+                tls13 = True
+
+    out = _rule("AT A GLANCE")
+
+    # Wi-Fi monitor capture: the management-frame view, if that is what
+    # dominates (little or no IP, but access points / probes seen).
+    wifi = stats.get("wireless") or {}
+    if wifi and total == 0:
+        aps = len(wifi.get("aps") or {})
+        probes = len(wifi.get("probes") or {})
+        deauth = (wifi.get("deauths") or {}).get("total", 0)
+        bits = []
+        if aps:
+            bits.append(_plural(aps, "access point"))
+        if probes:
+            bits.append(f"{_plural(probes, 'client')} probing")
+        if deauth:
+            bits.append(f"{deauth:,} deauth/disassoc frame(s)")
+        sentence = ("A Wi-Fi monitor-mode capture" + _span_clause(span)
+                    + ": " + ", ".join(bits) + ".")
+        out += _wrap(sentence)
+        return out
+
+    # Who originated it.
+    if len(inits) == 1:
+        actor = "a host-side capture: one host"
+    elif inits:
+        actor = f"a capture of {_plural(len(inits), 'originating host')}"
+    else:
+        actor = "a capture"
+
+    # Where to, named where the tool could name it.
+    dest_count = len(resps)
+    if dest_count == 1 and resps:
+        only = next(iter(resps))
+        dest = f" reaching one destination ({names.get(only, only)})"
+    elif dest_count:
+        dest = f" reaching {_plural(dest_count, 'destination')}"
+    else:
+        dest = ""
+
+    # Protocol mix + encryption, the two facts that set expectations for the
+    # rest of the report.
+    proto = ""
+    if domains:
+        top = domains.most_common(1)[0][0]
+        proto = ", mostly " + _DOMAIN_WORD.get(top, top)
+    crypt = ""
+    if total:
+        frac = enc / total
+        if frac >= 0.995:
+            crypt = ("; all of it encrypted (TLS 1.3)" if tls13
+                     else "; all of it encrypted")
+        elif frac > 0:
+            crypt = f"; {frac:.0%} encrypted"
+        else:
+            crypt = "; cleartext"
+
+    out += _wrap(f"This is {actor}{dest}{_span_clause(span)}{proto}{crypt}.")
+    return out
+
+
+def _span_clause(span: float) -> str:
+    return f" over {_duration(span)}" if span else ""
 
 
 def _capture_integrity(stats) -> List[str]:

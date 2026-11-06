@@ -772,7 +772,11 @@ def _endpoint_detail(series, names, by_key, top_n, enricher=None,
                 "first": None, "last": None, "series": [],
                 "names": Counter(), "transports": Counter(),
                 "versions": Counter(), "cert": None,
-                "cert_absence": set(), "records": {},
+                "cert_absence": set(), "records": {}, "alpn": set(),
+                # Per-TCP-stream app-data record maxes, so the request
+                # estimate can SUM across the endpoint's connections rather
+                # than report only the busiest one. HTTP/2 opens many.
+                "out_by_stream": {}, "in_by_stream": {},
                 "prints": Counter(), "from": Counter(), "domains": Counter(),
                 "qtypes": Counter(), "rcodes": Counter(), "zones": Counter(),
                 "private": channel.responder.labels.get("private"),
@@ -839,6 +843,19 @@ def _endpoint_detail(series, names, by_key, top_n, enricher=None,
             visible = obs.attrs.get("cert_visible")
             if visible and visible != "visible":
                 entry["cert_absence"].add(str(visible))
+            alpn = obs.attrs.get("tls_client_alpn")
+            if alpn:
+                entry["alpn"].update(a.strip() for a in str(alpn).split(","))
+            # Per-connection record totals (each flow's cumulative count,
+            # keyed on its TCP stream), for a per-endpoint request estimate.
+            stream = obs.locus.stream if obs.locus else None
+            if stream is not None:
+                for attr, bucket in (("tls_rec_out", "out_by_stream"),
+                                     ("tls_rec_in", "in_by_stream")):
+                    val = obs.attrs.get(attr)
+                    if val:
+                        entry[bucket][stream] = max(
+                            entry[bucket].get(stream, 0), int(val))
 
     if not peers:
         return []
@@ -965,6 +982,21 @@ def _endpoint_detail(series, names, by_key, top_n, enricher=None,
                     f"(bulk), {100.0 * small / total:.0f}% tiny "
                     f"(interactive or control)"
                 )
+            # HTTP/2 request-count estimate: how many requests the multiplexed
+            # connection carried, inferred from outbound record framing with
+            # no decryption. Only where ALPN negotiated h2 and only as a
+            # labelled estimate with its caveat.
+            from out.http2infer import estimate_requests
+            total_out = sum(entry["out_by_stream"].values())
+            total_in = sum(entry["in_by_stream"].values())
+            conns = len(entry["out_by_stream"])
+            est = estimate_requests(entry["alpn"], total_out, total_in)
+            if est:
+                across = (f" across {_plural(conns, 'connection')}"
+                          if conns > 1 else "")
+                out.append(f"    {'requests':<12} ≈ {est['requests_proxy']:,} "
+                           f"(HTTP/2 estimate{across}, from {est['basis']})")
+                out += _wrap(est["caveat"], indent="                 ")
         if entry["prints"]:
             out.append(f"    {'tls print':<12} " + " · ".join(
                 f"{value} ({count:,})"

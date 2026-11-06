@@ -327,6 +327,25 @@ GLOSSARY: List[Term] = [
         see=["TLS record", "SNI", "certificate", "TLS 1.3"],
     ),
     Term(
+        "HTTP/2 request estimate",
+        [r"HTTP/2 estimate", r"\bh2\b", r"request(s)? proxy", r"multiplex",
+         r"requests\s+≈"],
+        "Guessing how many requests a multiplexed HTTPS connection carried.",
+        "HTTP/2 carries many requests over one TLS connection at once "
+        "(multiplexing), so a single encrypted channel to a web server can "
+        "be one page load or a thousand-request scan, and the byte totals do "
+        "not separate them. The content is sealed, but each request's HEADERS "
+        "ride a small outbound TLS record whose cleartext header is readable "
+        "— so counting those records estimates the number of requests without "
+        "decrypting anything. It is an estimate, offered only for h2 "
+        "connections and labelled as such: HTTP/2 control frames (SETTINGS, "
+        "WINDOW_UPDATE, PING) inflate the count, and TLS coalescing — one "
+        "record carrying several frames — deflates it. Enough to answer 'ten "
+        "requests or ten thousand', not to count them exactly.",
+        see=["TLS record", "activity shape",
+             "TLS client fingerprint (GREASE, ALPN)"],
+    ),
+    Term(
         "TLS record",
         [r"TLS record", r"record shape", r"record sizes?", r"record header",
          r"byte records", r"kB records"],

@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 607 tests pass.
+**v0.1, working end-to-end.** 613 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -86,6 +86,16 @@ dependency.
   path so every inspector and rule works against either source unchanged.
   tshark is still needed for TLS-decrypted HTTP (`--http --keylog`) and for
   HTTP/2.
+- **HTTP/2 request estimate** — how many requests a multiplexed HTTPS
+  connection carried, inferred from outbound TLS record framing with no
+  keys. HTTP/2 sends each request's HEADERS in a small outbound
+  application-data record, so counting those (summed across the endpoint's
+  connections, since an h2 client opens many) estimates the request count —
+  enough to tell a ten-request fetch from a thousand-request scan through
+  encryption. Offered only on h2 and labelled an estimate: control frames
+  inflate it, TLS coalescing deflates it. (On a real engagement capture it
+  put the exposure-scan phase at ≈270 requests across 54 connections and the
+  light phase at ≈30.)
 - **Cross-host correlation** — a credential sent to an unrelated host, user
   identifiers reaching third parties.
 - **Session token quality** — predictability, fixed framing and decodable
@@ -344,7 +354,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 607 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 613 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

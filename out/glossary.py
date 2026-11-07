@@ -232,6 +232,25 @@ GLOSSARY: List[Term] = [
         see=["resolver", "NXDOMAIN"],
     ),
     Term(
+        "DoH / DoT (encrypted DNS)",
+        [r"\bDoH\b", r"\bDoT\b", r"encrypted DNS", r"DNS over HTTPS",
+         r"DNS over TLS"],
+        "DNS lookups hidden inside HTTPS or TLS — invisible to a sniffer.",
+        "Ordinary DNS is cleartext, so a name a host looks up is readable on "
+        "the wire. Encrypted DNS removes that: DNS over HTTPS (DoH) carries "
+        "the lookup inside a normal HTTPS request to a resolver, so it looks "
+        "like web traffic on port 443; DNS over TLS (DoT) does the same on "
+        "port 853. Either way the names a host resolves become invisible to "
+        "a passive observer. The tool recognises it — a connection to a "
+        "known public resolver (Cloudflare, Google, Quad9 and the like) by "
+        "its SNI or its resolver address on the DoH/DoT port — and says so, "
+        "because a report that claimed 'no DNS seen' when the DNS was merely "
+        "encrypted would be a lie by omission. It is also a security signal: "
+        "malware increasingly uses DoH to hide its command-and-control "
+        "lookups from exactly this kind of monitoring.",
+        see=["DNS", "resolver", "SNI"],
+    ),
+    Term(
         "resolver",
         [r"\bresolver\b"],
         "The server a host asks to perform DNS lookups on its behalf.",

@@ -247,6 +247,7 @@ def narrate(
     lines += _capture_integrity(stats)
     lines += _neighbor_conflicts(stats)
     lines += _wireless(stats)
+    lines += _encrypted_dns(series)
     lines += _timeline(series, top_n)
     lines += _connections(stats, names, top_n)
     lines += _endpoints(series, names, top_n)
@@ -2002,6 +2003,54 @@ def _capture_integrity(stats) -> List[str]:
             "a gap is an artefact of the gap, not a behaviour.",
             indent="               ",
         )
+    return out
+
+
+def _encrypted_dns(series) -> List[str]:
+    """Hosts resolving names over DoH / DoT — the DNS this capture cannot see.
+
+    Printed only when a known encrypted-DNS resolver was contacted. The point
+    is honesty: without this, a host doing all its lookups over DoH would make
+    the report read 'no DNS seen', when in truth the resolution happened and
+    is simply unreadable here.
+    """
+    from core.doh import classify_encrypted_dns
+    # initiator -> {(provider, protocol): (basis, exchanges)}
+    found: Dict[str, Dict[Tuple[str, str], Tuple[str, int]]] = {}
+    for one in series:
+        channel = one.channel
+        if channel.domain != "net" or not channel.responder:
+            continue
+        hit = classify_encrypted_dns(
+            channel.dims.get("sni", "") or "",
+            channel.responder.value,
+            channel.dims.get("dport"))
+        if hit is None:
+            continue
+        provider, proto, basis = hit
+        who = channel.initiator.value if channel.initiator else "?"
+        bucket = found.setdefault(who, {})
+        prev = bucket.get((provider, proto))
+        bucket[(provider, proto)] = (basis, (prev[1] if prev else 0) + one.count)
+
+    if not found:
+        return []
+
+    out = _rule("ENCRYPTED DNS (DoH / DoT)")
+    out += _wrap(
+        "Name resolution this capture cannot read: these hosts reached a "
+        "known encrypted-DNS resolver, so their lookups happened inside "
+        "HTTPS (DoH) or TLS (DoT) rather than in the clear. The names "
+        "resolved are not visible here — and a host moving its DNS to DoH "
+        "is also how modern malware hides its lookups from monitoring.",
+    )
+    for who, providers in found.items():
+        out.append("")
+        out.append(f"  {who}")
+        for (provider, proto), (basis, exch) in sorted(
+                providers.items(), key=lambda kv: -kv[1][1]):
+            out.append(f"     {proto} to {provider}  "
+                       f"({basis}, {exch:,} exchange(s))")
     return out
 
 

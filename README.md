@@ -30,7 +30,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 613 tests pass.
+**v0.1, working end-to-end.** 622 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -96,6 +96,13 @@ dependency.
   inflate it, TLS coalescing deflates it. (On a real engagement capture it
   put the exposure-scan phase at ≈270 requests across 54 connections and the
   light phase at ≈30.)
+- **Encrypted-DNS (DoH/DoT) detection** — a host doing its lookups over DNS
+  over HTTPS or TLS makes the report's DNS blind, so "no DNS seen" would be a
+  lie by omission. The tool recognises a connection to a known public
+  resolver (Cloudflare, Google, Quad9…) by its SNI or its resolver address on
+  the DoH (443) / DoT (853) port, and says the resolution happened and is
+  unreadable here — which is also a security signal, since malware moves its
+  C2 lookups to DoH to defeat exactly this monitoring.
 - **Cross-host correlation** — a credential sent to an unrelated host, user
   identifiers reaching third parties.
 - **Session token quality** — predictability, fixed framing and decodable
@@ -354,7 +361,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 613 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 622 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

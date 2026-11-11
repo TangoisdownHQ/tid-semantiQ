@@ -8,3 +8,8 @@ __pycache__/
 *.html
 keys.log
 .banner-candidates/
+
+# packaging build artifacts
+build/
+dist/
+*.egg-info/

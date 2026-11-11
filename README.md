@@ -287,6 +287,19 @@ dependency.
 No scoring weight has been fitted against real C2 yet — see
 [Calibration](#calibration), and do not quote a detection rate from this.
 
+## Install
+
+Nothing to install to try it — the repo runs as-is (`python3 semantiq.py …`).
+To put it on PATH as a `semantiq` command, install it; there are no Python
+dependencies, so this pulls in nothing:
+
+```bash
+pipx install git+https://github.com/TangoisdownHQ/tid-semantiQ   # isolated
+# or, into the current environment:
+pip install git+https://github.com/TangoisdownHQ/tid-semantiQ
+semantiq read capture.pcap
+```
+
 ## Run it
 
 ```bash

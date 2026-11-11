@@ -262,6 +262,113 @@ def test_wireless_section_reaches_the_report():
     assert "denial-of-service" in flat          # the honest caveat
 
 
+def _eapol_key(info_bits: int, pmkid: bool = False) -> bytes:
+    """An EAPOL-Key body with the given Key Information bits."""
+    key = bytearray()
+    key += bytes([2])                               # descriptor type
+    key += bytes([(info_bits >> 8) & 0xFF, info_bits & 0xFF])  # key info
+    key += b"\x00\x10"                              # key length
+    key += b"\x00" * 8                              # replay counter
+    key += b"\x11" * 32                             # nonce
+    key += b"\x00" * 16                             # key IV
+    key += b"\x00" * 8                              # key RSC
+    key += b"\x00" * 8                              # reserved
+    key += b"\x22" * 16                             # MIC
+    if pmkid:
+        kde = b"\x00\x0f\xac\x04" + b"\xAB" * 16    # RSN PMKID KDE
+        data = bytes([0xDD, len(kde)]) + kde
+    else:
+        data = b""
+    key += bytes([(len(data) >> 8) & 0xFF, len(data) & 0xFF]) + data
+    eapol = bytes([2, 3]) + bytes([(len(key) >> 8) & 0xFF, len(key) & 0xFF])
+    return eapol + bytes(key)
+
+
+def _eapol_frame(bssid, client, from_ds, info_bits, pmkid=False):
+    fc0 = 0x08                                      # data frame, subtype 0
+    fc1 = 0x02 if from_ds else 0x01                 # FromDS (AP->STA) / ToDS
+    frame = bytes([fc0, fc1]) + b"\x00\x00"
+    if from_ds:                                     # addr1=STA, addr2=BSSID
+        frame += bytes.fromhex(client.replace(":", ""))
+        frame += bytes.fromhex(bssid.replace(":", ""))
+    else:                                           # addr1=BSSID, addr2=STA
+        frame += bytes.fromhex(bssid.replace(":", ""))
+        frame += bytes.fromhex(client.replace(":", ""))
+    frame += bytes.fromhex(bssid.replace(":", ""))  # addr3 = BSSID
+    frame += b"\x00\x00"                            # sequence control
+    frame += b"\xaa\xaa\x03\x00\x00\x00\x88\x8e"    # LLC/SNAP, EAPOL ethertype
+    return frame + _eapol_key(info_bits, pmkid)
+
+
+# Key Information bit values (see wifi._parse_eapol_key).
+_M1 = 0x0088    # ACK, pairwise
+_M2 = 0x0108    # MIC, pairwise
+_M3 = 0x01c8    # MIC+ACK+Install+Secure
+_M4 = 0x0308    # MIC+Secure
+
+
+def test_four_way_handshake_messages_are_classified():
+    from capture.wifi import WifiMonitor
+    mon = WifiMonitor()
+    ap, sta = "aa:bb:cc:00:00:01", "de:ad:be:ef:00:09"
+    mon.observe(_eapol_frame(ap, sta, True, _M1))
+    mon.observe(_eapol_frame(ap, sta, False, _M2))
+    rep = mon.report()["handshakes"]
+    assert len(rep) == 1
+    h = rep[0]
+    assert h["bssid"] == ap and h["client"] == sta
+    assert h["messages"] == [1, 2]
+    assert h["crackable"] is True          # nonce (M1) + MIC (M2)
+
+
+def test_lone_m1_is_not_crackable_without_pmkid():
+    from capture.wifi import WifiMonitor
+    mon = WifiMonitor()
+    mon.observe(_eapol_frame("aa:bb:cc:00:00:01", "de:ad:be:ef:00:09",
+                             True, _M1))
+    h = mon.report()["handshakes"][0]
+    assert h["messages"] == [1]
+    assert h["crackable"] is False and h["pmkid"] is False
+
+
+def test_pmkid_in_m1_is_crackable_with_no_client():
+    from capture.wifi import WifiMonitor
+    mon = WifiMonitor()
+    mon.observe(_eapol_frame("aa:bb:cc:00:00:01", "de:ad:be:ef:00:09",
+                             True, _M1, pmkid=True))
+    h = mon.report()["handshakes"][0]
+    assert h["pmkid"] is True
+
+
+def test_handshake_reaches_the_report_with_the_capture_not_compromise_caveat():
+    import tempfile
+    from capture.base import group_into_series
+    from capture.pcap import PcapSource
+    from out.narrate import narrate
+    ap, sta = "aa:bb:cc:00:00:01", "de:ad:be:ef:00:09"
+    frames = [
+        _radiotap(_eapol_frame(ap, sta, True, _M1, pmkid=True)),
+        _radiotap(_eapol_frame(ap, sta, False, _M2)),
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "hs.pcap"
+        with open(path, "wb") as h:
+            h.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535,
+                                LINKTYPE_IEEE802_11_RADIOTAP))
+            for i, fr in enumerate(frames):
+                h.write(struct.pack("<IIII", 1_700_000_000 + i, 0,
+                                    len(fr), len(fr)))
+                h.write(fr)
+        src = PcapSource(path)
+        series = list(src.observations())
+        text = " ".join(narrate(series, [], stats=src.stats,
+                                source_name="hs.pcap").split())
+    assert "WPA handshakes" in text
+    assert "PMKID" in text and "crackable" in text
+    assert "Capture is not compromise" in text
+    assert f"{ap} ↔ {sta}" in text
+
+
 def test_glossary_covers_wifi_management_vocab():
     from out.glossary import terms_in
     found = {t.term for _, t in terms_in(

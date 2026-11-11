@@ -32,7 +32,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 629 tests pass.
+**v0.1, working end-to-end.** 633 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -148,7 +148,12 @@ dependency.
   in which a device leaks the networks it has joined before (fingerprinting
   it), and deauthentication frames — a flood of which is the classic Wi-Fi
   denial-of-service and the opening of an evil-twin or handshake-capture
-  attack, reported with the caveat that normal disconnects deauth too.
+  attack, reported with the caveat that normal disconnects deauth too. It
+  also catches the **WPA 4-way handshake** itself — the unencrypted EAPOL
+  messages — and flags when a capture holds enough to crack the passphrase
+  offline (a nonce+MIC pair, or a **PMKID** from the first message, which
+  needs no client at all), with the honest line that capture is not
+  compromise, it is the step before it.
 - **Streaming mode** (`--stream`) — sliding windows on an event-time clock,
   bounded memory, and an advisory when the window is too short to hold the
   cadences present.
@@ -376,7 +381,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 629 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 633 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

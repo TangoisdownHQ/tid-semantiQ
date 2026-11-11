@@ -2094,6 +2094,31 @@ def _wireless(stats) -> List[str]:
                                Counter(ssids).most_common(6))
             out.append(f"     {client}  →  {wanted}")
 
+    handshakes = wifi.get("handshakes") or []
+    if handshakes:
+        crackable = [h for h in handshakes if h["crackable"] or h["pmkid"]]
+        out.append("")
+        out.append(f"  WPA handshakes  {len(handshakes)} captured"
+                   + (f", {len(crackable)} with enough to crack offline"
+                      if crackable else ""))
+        for h in sorted(handshakes,
+                        key=lambda h: -(h["crackable"] + h["pmkid"]))[:8]:
+            msgs = "".join(f"M{m}" for m in h["messages"])
+            tags = []
+            if h["pmkid"]:
+                tags.append("PMKID — crackable with no client")
+            if h["crackable"]:
+                tags.append("4-way nonce+MIC — crackable")
+            tag = ("  ← " + "; ".join(tags)) if tags else ""
+            out.append(f"     {h['bssid']} ↔ {h['client']}  {msgs}{tag}")
+        out += _wrap(
+            "a captured handshake is the material to crack the passphrase "
+            "OFFLINE, not the passphrase itself — a PMKID or a nonce+MIC pair "
+            "(M1+M2) is what a cracker feeds. Capture is not compromise; it "
+            "is the step before it.",
+            indent="                 ",
+        )
+
     deauths = wifi.get("deauths") or {}
     if deauths.get("total"):
         out.append("")

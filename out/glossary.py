@@ -823,7 +823,8 @@ GLOSSARY: List[Term] = [
         "802.11 / monitor mode / radiotap",
         [r"802\.11", r"monitor mode", r"\bradiotap\b", r"\bWi-?Fi\b",
          r"\bBSSID\b", r"\bSSID\b", r"\bbeacons?\b", r"probe request",
-         r"\bdeauth", r"disassoc", r"access points?"],
+         r"\bdeauth", r"disassoc", r"access points?", r"\bPMKID\b",
+         r"WPA handshake", r"4-way", r"\bEAPOL\b"],
         "Capturing Wi-Fi off the air, and the headers that wrap those frames.",
         "An ordinary Wi-Fi capture, taken while associated to an access "
         "point, arrives already stripped to Ethernet-looking frames — the "
@@ -841,8 +842,12 @@ GLOSSARY: List[Term] = [
         "SSIDs, probe requests in which a device leaks the networks it has "
         "joined before (fingerprinting it), and deauthentications — a flood "
         "of which is the classic Wi-Fi denial-of-service and the opening of "
-        "an evil-twin or handshake-capture attack. Monitor-mode capture "
-        "reaches other people's "
+        "an evil-twin or handshake-capture attack. The WPA 4-way handshake "
+        "itself rides unencrypted EAPOL frames at the start of a session, so "
+        "a monitor capture that caught it — a nonce-and-MIC pair, or a PMKID "
+        "from the first message — holds the material to crack the passphrase "
+        "offline (capture is not compromise; it is the step before it), which "
+        "the report flags. Monitor-mode capture reaches other people's "
         "communications and is governed by different law than reading your "
         "own traffic.",
         see=["encrypted traffic", "MAC / OUI vendor"],

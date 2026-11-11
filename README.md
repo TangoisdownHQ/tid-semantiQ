@@ -5,6 +5,8 @@
 
 # tid-semantiQ
 
+[![tests](https://github.com/TangoisdownHQ/tid-semantiQ/actions/workflows/ci.yml/badge.svg)](https://github.com/TangoisdownHQ/tid-semantiQ/actions/workflows/ci.yml)
+
 Reads a packet capture — encrypted or not — and narrates what is in it, with
 the numbers behind every claim.
 

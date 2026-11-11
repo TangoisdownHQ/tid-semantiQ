@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from capture import decode as D
+from capture import enterprise as _ENT
 from capture.integrity import IntegrityTracker
 from capture.neighbor import NeighborTable
 from capture.osfp import tcp_signature
@@ -119,6 +120,10 @@ def test_payload_decoders_never_raise():
         ("quic_info", D.quic_info),
         ("record_shape", record_shape),
         ("WifiMonitor.observe", WifiMonitor().observe),
+        ("ent.rdp_cookie", _ENT.rdp_cookie),
+        ("ent.smb_info", _ENT.smb_info),
+        ("ent.kerberos_message", _ENT.kerberos_message),
+        ("ent.ldap_bind_dn", _ENT.ldap_bind_dn),
     ):
         _assert_no_raise(label, fn, cases)
 

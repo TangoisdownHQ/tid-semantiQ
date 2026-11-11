@@ -32,7 +32,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 633 tests pass.
+**v0.1, working end-to-end.** 641 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -105,6 +105,13 @@ dependency.
   the DoH (443) / DoT (853) port, and says the resolution happened and is
   unreadable here — which is also a security signal, since malware moves its
   C2 lookups to DoH to defeat exactly this monitoring.
+- **Enterprise/AD cleartext metadata** — the protocols that fill an internal
+  capture leak real recon before encryption: RDP's `mstshash=<username>`
+  cookie in the connection request, the SMB dialect and the NTLMSSP
+  challenge that names the domain/computer/DNS forms, the Kerberos message
+  type (an AS-REQ is where a client states its username), and the LDAP bind
+  DN. Read as metadata, decrypting nothing — the enterprise cousin of the
+  SSH/NTP/DHCP parsers.
 - **Cross-host correlation** — a credential sent to an unrelated host, user
   identifiers reaching third parties.
 - **Session token quality** — predictability, fixed framing and decodable
@@ -381,7 +388,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 633 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 641 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

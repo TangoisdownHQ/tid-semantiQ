@@ -973,6 +973,25 @@ GLOSSARY: List[Term] = [
     ),
     # ---- cleartext service announcements ----------------------------------
     Term(
+        "enterprise/AD metadata (SMB, Kerberos, LDAP, RDP)",
+        [r"\bSMB\b", r"\bKerberos\b", r"\bLDAP\b", r"\bRDP\b", r"\bNTLM",
+         r"mstshash", r"bind DN", r"AS-REQ", r"ENTERPRISE / AD"],
+        "Recon these Active-Directory protocols leak before encryption.",
+        "An internal capture is full of Active-Directory traffic, and four "
+        "of its protocols hand over real reconnaissance in the clear. RDP's "
+        "connection request carries a routing cookie, mstshash=<username>, so "
+        "the account being logged in as is in the first client packet. SMB "
+        "negotiates a dialect in the open, and the NTLMSSP challenge the "
+        "server returns names the domain, the computer, and their DNS forms "
+        "— an AD map for free. Kerberos's message type is readable (an "
+        "AS-REQ is where a client states the username it is authenticating "
+        "as). An LDAP BindRequest carries the bind DN — the account — unless "
+        "LDAPS or StartTLS is used. The tool reads these as metadata, "
+        "decrypting nothing; where a protocol has switched to TLS, only the "
+        "shape remains, as everywhere else.",
+        see=["SSH banner", "TLS", "encrypted traffic"],
+    ),
+    Term(
         "SSH banner",
         [r"\bSSH\b", r"ssh\.(client|server)", r"OpenSSH", r"identification string"],
         "The software name each side of an SSH session announces in the clear.",

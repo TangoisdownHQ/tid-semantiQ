@@ -79,7 +79,8 @@ class _Flow:
                  "handshake", "handshake_overflow", "http",
                  "walk_out", "walk_in",
                  "client_grease", "client_alpn", "client_ciphers",
-                 "client_exts", "ssh_client", "ssh_server")
+                 "client_exts", "ssh_client", "ssh_server",
+                 "enterprise", "enterprise_done")
 
     def __init__(self, initiator: str, initiator_port: int, stream: int,
                  responder: str = "", inferred: bool = False):
@@ -101,6 +102,10 @@ class _Flow:
         #: the one moment SSH names its software before encrypting.
         self.ssh_client: Optional[str] = None
         self.ssh_server: Optional[str] = None
+        #: Cleartext metadata from an enterprise/AD protocol (SMB, Kerberos,
+        #: LDAP, RDP), read once per flow. See capture/enterprise.py.
+        self.enterprise: Dict[str, str] = {}
+        self.enterprise_done = False
         #: True when no SYN was seen and the initiator was guessed from the
         #: first packet — a capture started mid-connection. Carried onto
         #: every Observation so a consumer knows the direction is inferred.
@@ -422,6 +427,40 @@ class PcapSource(CaptureSource):
             )
         ]
 
+    def _read_enterprise(self, flow, segment) -> None:
+        """Pull cleartext AD-protocol metadata by service port, once per flow.
+
+        Gated on the port so the parsers only run where the protocol lives,
+        and only until something is found (NTLMSSP/Kerberos replies arrive a
+        few packets into a flow, so it cannot be first-packet-only).
+        """
+        from capture import enterprise as ent
+        dport = min(segment.sport, segment.dport)
+        payload = segment.payload
+        found: Dict[str, str] = {}
+        if dport == 3389:
+            user = ent.rdp_cookie(payload)
+            if user:
+                found["rdp_user"] = user
+        elif dport in (445, 139):
+            info = ent.smb_info(payload)
+            if info:
+                found.update(info)
+        elif dport == 88:
+            msg = ent.kerberos_message(payload)
+            if msg:
+                found["kerberos"] = msg
+        elif dport == 389:
+            dn = ent.ldap_bind_dn(payload)
+            if dn:
+                found["ldap_bind_dn"] = dn
+        if found:
+            flow.enterprise.update(found)
+            # A protocol with more to say (SMB sees a dialect then an NTLMSSP
+            # challenge later) keeps reading; a single-shot one is done.
+            if dport != 445 and dport != 139:
+                flow.enterprise_done = True
+
     def icmp_errors(self) -> Dict[str, object]:
         """ICMP errors grouped by (destination, reason).
 
@@ -536,6 +575,12 @@ class PcapSource(CaptureSource):
             elif direction is Direction.INGRESS and flow.ssh_server is None:
                 flow.ssh_server = ssh_banner(segment.payload)
 
+        # Enterprise/AD protocols leak recon in the clear. Read once per flow,
+        # gated by the service port, on whichever segment carries the signal
+        # (NTLMSSP and Kerberos replies arrive a few packets in, not first).
+        if segment.payload and not flow.enterprise_done:
+            self._read_enterprise(flow, segment)
+
         # The server's half of the handshake: negotiated version always, and
         # the certificate only up to TLS 1.2. Read on the first ingress
         # segment that carries one, so an earlier egress burst on the same
@@ -625,6 +670,7 @@ class PcapSource(CaptureSource):
             tls_fingerprint=flow.fingerprint or "",
             ssh_client=flow.ssh_client or "",
             ssh_server=flow.ssh_server or "",
+            **flow.enterprise,
             dport=str(_responder_port(segment, flow, direction)),
             direction_inferred=flow.inferred,
             **_tls_attrs(flow),

@@ -1262,6 +1262,13 @@ def _protocol_detail(series, top_n) -> List[str]:
                 ("dns_service", "dns.service"),
                 ("quic_version", "quic.version"),
                 ("quic_packet", "quic.packet"),
+                ("rdp_user", "rdp.user"),
+                ("smb_dialect", "smb.dialect"),
+                ("nb_domain", "smb.domain"),
+                ("dns_domain", "smb.dns_domain"),
+                ("nb_computer", "smb.computer"),
+                ("kerberos", "kerberos.message"),
+                ("ldap_bind_dn", "ldap.bind_dn"),
             ):
                 value = obs.attrs.get(attr)
                 if value:
@@ -1288,6 +1295,9 @@ def _protocol_detail(series, top_n) -> List[str]:
         # which LAN naming systems (mDNS/LLMNR) were gossiping.
         ("SERVICES", ["ssh.client", "ssh.server", "ntp.mode", "ntp.stratum",
                       "dhcp.message", "dhcp.hostname", "dns.service"]),
+        ("ENTERPRISE / AD", ["rdp.user", "smb.dialect", "smb.domain",
+                             "smb.dns_domain", "smb.computer",
+                             "kerberos.message", "ldap.bind_dn"]),
         ("QUIC", ["quic.version", "quic.packet"]),
     )
     for title, buckets in groups:

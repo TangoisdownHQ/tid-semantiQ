@@ -1008,6 +1008,24 @@ GLOSSARY: List[Term] = [
         see=["encrypted traffic", "activity shape"],
     ),
     Term(
+        "traceroute / network path (ICMP time-exceeded)",
+        [r"time-exceeded", r"time exceeded", r"\btraceroute\b", r"NETWORK PATH",
+         r"hop\(s\) answered", r"exceeded in transit"],
+        "Rebuilding the route to a host from the routers that answered a traceroute.",
+        "A traceroute maps the path to a destination by sending packets with "
+        "a time-to-live of 1, then 2, then 3, and so on: each router that "
+        "decrements the TTL to zero discards the packet and reports back with "
+        "an ICMP 'time exceeded in transit' that names itself. Collected, "
+        "those replies are the ordered list of routers on the way to the "
+        "destination — the network path. The tool reconstructs it from the "
+        "time-exceeded errors in a capture, ordering the hops by the probe "
+        "port where the traceroute varied it (and by arrival order "
+        "otherwise), and is explicit that a hop which did not answer is a gap "
+        "it cannot fill: it reports the routers that answered, in order, not "
+        "a proven-contiguous route.",
+        see=["passive OS fingerprint (TTL, SYN)"],
+    ),
+    Term(
         "NTP / stratum",
         [r"\bNTP\b", r"\bstratum\b", r"ntp\.(mode|stratum)"],
         "The time-synchronisation protocol; stratum is distance from a true clock.",

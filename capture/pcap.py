@@ -252,6 +252,10 @@ class PcapSource(CaptureSource):
         # computed here rather than incrementally.
         self.stats["connections"] = self.connection_outcomes()
         self.stats["icmp_errors"] = self.icmp_errors()
+        # Reconstruct any traceroute path from the raw time-exceeded errors
+        # (the grouped form above drops the per-hop ordering this needs).
+        from core.pathreco import reconstruct
+        self.stats["paths"] = reconstruct(self._icmp_errors)
         integrity = self._integrity.report()
         # Was the file still being written while we read it? A growing or
         # just-written capture means this is a partial snapshot — merged into

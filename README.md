@@ -32,7 +32,7 @@ dependency.
 
 ## Status
 
-**v0.1, working end-to-end.** 641 tests pass.
+**v0.1, working end-to-end.** 651 tests pass.
 
 - **Observation report** — the default output, and the point of the tool. A
   plain-language account of the capture, a timeline, conversations resolved to
@@ -80,6 +80,12 @@ dependency.
   *never answered*, counted per destination. Tracked independently of
   application data, because a connection that failed carries none — which is
   why every payload-driven analysis was structurally blind to it.
+- **Network path reconstruction** — a capture that contains a traceroute
+  carries the ICMP "time exceeded in transit" each router sent back; the
+  tool collects them into the ordered path to each destination, hops ordered
+  by the probe port where the traceroute varied it (and by arrival order
+  otherwise). Honest that a silent hop is a gap: it reports the routers that
+  *answered*, in order, not a proven-contiguous route.
 - **Content analysis** (`http`) — JWTs, cookie flags and scope, credentials
   in URLs, CORS, secrets in response bodies, OAuth flow defects. Cleartext
   HTTP/1.x is parsed **natively, with no tshark and no keys**: messages are
@@ -388,7 +394,7 @@ python3 semantiq.py read capture.pcap --trace 5
 python3 semantiq.py read capture.pcap --investigate 3
 
 # tests, and synthetic captures to try it on
-for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 641 tests
+for t in tests/test_*.py; do PYTHONPATH=. python3 "$t"; done   # 651 tests
 
 # measure detection-per-jitter + false positives against the real scorer
 python3 tools/calibrate.py

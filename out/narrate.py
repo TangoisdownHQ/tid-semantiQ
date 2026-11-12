@@ -248,6 +248,7 @@ def narrate(
     lines += _neighbor_conflicts(stats)
     lines += _wireless(stats)
     lines += _encrypted_dns(series)
+    lines += _paths(stats, names)
     lines += _timeline(series, top_n)
     lines += _connections(stats, names, top_n)
     lines += _endpoints(series, names, top_n)
@@ -2013,6 +2014,35 @@ def _capture_integrity(stats) -> List[str]:
             "a gap is an artefact of the gap, not a behaviour.",
             indent="               ",
         )
+    return out
+
+
+def _paths(stats, names) -> List[str]:
+    """The network path(s) reconstructed from ICMP time-exceeded errors.
+
+    Printed only when a traceroute's routers were actually seen. Honest about
+    its basis (port order vs arrival order) and about what it cannot see — a
+    silent hop is a gap, so this is the routers that ANSWERED, in order, not
+    a guaranteed-contiguous path.
+    """
+    paths = (stats or {}).get("paths") or []
+    if not paths:
+        return []
+
+    out = _rule("NETWORK PATH (from ICMP time-exceeded)")
+    out += _wrap(
+        "Routers that answered a traceroute to each destination, in order. "
+        "A hop that did not reply is a gap this cannot fill; these are the "
+        "hops that answered, not a proven-contiguous route.",
+    )
+    for path in paths[:8]:
+        dest = path["dest"]
+        label = names.get(dest, dest)
+        out.append("")
+        out.append(f"  toward {label}  ({len(path['hops'])} hop(s) answered, "
+                   f"ordered by {path['ordered_by']})")
+        chain = "  →  ".join(names.get(h, h) for h in path["hops"])
+        out += _wrap(chain, indent="     ")
     return out
 
 
